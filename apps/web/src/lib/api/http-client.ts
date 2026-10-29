@@ -64,7 +64,8 @@ export const connectClient = {
 export const sellerClient = {
   async earnings(from?: string, to?: string) {
     const query = new URLSearchParams(); if (from) query.set('from', from); if (to) query.set('to', to);
-    return request<import('./models').SellerEarnings>(`/seller/earnings${query.size ? `?${query.toString()}` : ''}`);
+    const suffix = query.toString();
+    return request<import('./models').SellerEarnings>(`/seller/earnings${suffix ? `?${suffix}` : ''}`);
   }
 };
 export const complaintClient = {
