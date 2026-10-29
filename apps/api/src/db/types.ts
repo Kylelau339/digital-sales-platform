@@ -151,6 +151,7 @@ export interface OrdersTable {
   quote_id: string | null;
   refund_policy_version: string;
   refund_policy_snapshot_json: string;
+  platform_fee_bps: Generated<number>;
   platform_fee_cents: number;
   seller_amount_cents: number;
   tax_snapshot_json: string;
@@ -189,6 +190,7 @@ export interface TransactionsTable {
   signature_verified: number;
   raw_event_hash: string | null;
   failure_reason: string | null;
+  refund_request_id: string | null;
   created_at: string;
   processed_at: string | null;
   chain: string | null;
@@ -230,8 +232,52 @@ export interface ComplaintsTable {
   review_route: string;
   refund_decision: string;
   refund_amount_usd_cents: number | null;
+  idempotency_key: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface RefundRequestsTable {
+  id: string;
+  complaint_id: string;
+  order_id: string;
+  requested_by: string;
+  amount_minor: number;
+  currency: string;
+  status: string;
+  stripe_refund_id: string | null;
+  stripe_payment_intent: string;
+  idempotency_key: string;
+  failure_reason: string | null;
+  product_refund_cents: number;
+  tax_refund_cents: number;
+  platform_fee_reversal_cents: number;
+  seller_reversal_cents: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TemplateTakedownsTable {
+  id: string;
+  template_id: string;
+  mode: string;
+  reason: string;
+  actor_id: string;
+  previous_status: string;
+  entitlements_revoked: number;
+  created_at: string;
+}
+
+export interface EmailDeliveryLogsTable {
+  id: string;
+  user_id: string;
+  recipient: string;
+  kind: string;
+  provider: string;
+  status: string;
+  provider_message_id: string | null;
+  error_code: string | null;
+  created_at: string;
 }
 
 export interface ComplaintEvidenceTable {
@@ -364,6 +410,9 @@ export interface ConnectAccountIntentsTable {
 }
 
 export interface Database {
+  email_delivery_logs: EmailDeliveryLogsTable;
+  refund_requests: RefundRequestsTable;
+  template_takedowns: TemplateTakedownsTable;
   email_verification_codes: EmailVerificationCodesTable;
   seller_connected_accounts: SellerConnectedAccountsTable;
   connect_account_intents: ConnectAccountIntentsTable;

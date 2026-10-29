@@ -24,14 +24,14 @@ export interface CreateSingleItemOrderInput {
   id: string; orderNo: string; buyerId: string; sellerId: string; templateId: string; versionId: string;
   licenseType: LicenseType; licensePriceFactor: string; priceCents: number; paymentCurrency: Order['paymentCurrency'];
   paymentAmountMinor: number; quoteId?: string | null; quoteRate: Order['quoteRate']; quoteExpiresAt: string | null;
-  platformFeeCents: number; sellerAmountCents: number; taxSnapshot: Record<string, JsonValue>; idempotencyKey: string; now: string;
+  platformFeeBps?: number; platformFeeCents: number; sellerAmountCents: number; taxSnapshot: Record<string, JsonValue>; idempotencyKey: string; now: string;
 }
 export interface CreatePaymentTransactionInput { id: string; orderId: string; provider: string; type?: PaymentTransaction['type']; amountMinor: number; pricingAmountUsdCents: number; currency: PaymentTransaction['currency']; eventId?: string | null; status: PaymentTransaction['status']; signatureVerified: boolean; now: string; }
 export interface CreateRefundTransactionInput extends CreatePaymentTransactionInput { parentTransactionId: string; }
 export interface CreateEntitlementInput { id: string; orderId: string; templateId: string; versionId: string; licenseType: LicenseType; expiresAt: string; now: string; }
 export interface ReissueEntitlementInput { id: string; expiresAt: string; now: string; }
 export interface DownloadConsumeResult { entitlement: Entitlement; counted: boolean; }
-export interface CreateComplaintInput { id: string; orderId: string; entitlementId: string | null; templateId: string; versionId: string; reason: ComplaintReason; description: string; reviewRoute: ReviewRoute; actorId: string; now: string; }
+export interface CreateComplaintInput { id: string; orderId: string; entitlementId: string | null; templateId: string; versionId: string; reason: ComplaintReason; description: string; reviewRoute: ReviewRoute; actorId: string; idempotencyKey?: string | null; now: string; }
 export interface RefundDecisionInput { decision: 'approved' | 'rejected'; amountUsdCents: number | null; reason: string; actorId: string; now: string; }
 export interface ComplaintTimelineEvent { id: string; event: string; actorId: string | null; note: string | null; at: string; }
 export interface AppendAuditLogInput { id: string; actor: AuditLog['actor']; action: string; targetType: string; targetId: string; diff: AuditLog['diff']; reason: string | null; requestId: string | null; ip: string | null; userAgent: string | null; at: string; }
@@ -45,7 +45,7 @@ export interface PreviewAssetRepository { create(input: CreatePreviewAssetInput)
 export interface RefundPolicyRepository { getCurrent(): Promise<RefundPolicy>; findByVersion(version: string): Promise<RefundPolicy | null>; createVersion(input: CreateRefundPolicyInput): Promise<RefundPolicy>; }
 export interface OrderRepository { createSingleItemPendingPayment(input: CreateSingleItemOrderInput): Promise<Order>; findById(id: string): Promise<Order | null>; findByIdempotencyKey(key: string): Promise<Order | null>; }
 export interface EntitlementRepository { findById(id: string): Promise<Entitlement | null>; listByBuyer(buyerId: string, page: PageInput): Promise<Page<Entitlement>>; }
-export interface ComplaintRepository { create(input: CreateComplaintInput): Promise<Complaint>; findById(id: string): Promise<Complaint | null>; }
+export interface ComplaintRepository { create(input: CreateComplaintInput): Promise<Complaint>; findById(id: string): Promise<Complaint | null>; listByBuyer(buyerId: string, page: PageInput): Promise<Page<Complaint>>; }
 export interface AuditLogRepository { append(input: AppendAuditLogInput): Promise<AuditLog>; listByTarget(targetType: string, targetId: string, page: PageInput): Promise<Page<AuditLog>>; list(page: PageInput): Promise<Page<AuditLog>>; }
 
 /** Future capabilities are declarations only and are never wired into the M0 factory. */

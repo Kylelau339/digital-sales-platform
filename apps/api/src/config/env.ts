@@ -21,12 +21,23 @@ export const env = z.object({
   STRIPE_CONNECT_RETURN_URL: z.url().default('https://localhost:5173/seller/connect/return'),
   STRIPE_CONNECT_REFRESH_URL: z.url().default('https://localhost:5173/seller/connect/refresh'),
   STRIPE_CHECKOUT_SUCCESS_URL: z.url().default('https://localhost:5173/library?checkout=success'),
-  STRIPE_CHECKOUT_CANCEL_URL: z.url().default('https://localhost:5173/checkout/cancel')
+  STRIPE_CHECKOUT_CANCEL_URL: z.url().default('https://localhost:5173/checkout/cancel'),
+  PLATFORM_FEE_BPS: z.coerce.number().int().min(0).max(10000).default(0),
+  EMAIL_PROVIDER: z.enum(['console', 'smtp']).default('console'),
+  EMAIL_FROM: z.string().trim().min(3).default('MotionBay <no-reply@localhost>'),
+  EMAIL_REPLY_TO: z.string().trim().email().optional(),
+  SMTP_HOST: z.string().trim().min(1).optional(),
+  SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(587),
+  SMTP_SECURE: booleanEnv,
+  SMTP_USER: z.string().trim().optional(),
+  SMTP_PASS: z.string().optional()
 }).superRefine((value, ctx) => {
   if (value.NODE_ENV === 'production') {
     if (value.USE_FIXTURES) ctx.addIssue({ code: 'custom', path: ['USE_FIXTURES'], message: 'Production cannot enable fixtures.' });
     if (value.SESSION_SECRET === DEV_SESSION_SECRET || value.CSRF_SECRET === DEV_CSRF_SECRET) ctx.addIssue({ code: 'custom', path: ['SESSION_SECRET'], message: 'Production requires unique session and CSRF secrets.' });
     if (!value.ALLOWED_ORIGIN.startsWith('https://')) ctx.addIssue({ code: 'custom', path: ['ALLOWED_ORIGIN'], message: 'Production requires an HTTPS origin.' });
+    if (value.EMAIL_PROVIDER !== 'smtp') ctx.addIssue({ code: 'custom', path: ['EMAIL_PROVIDER'], message: 'Production requires the SMTP email provider.' });
+    if (!value.SMTP_HOST || !value.SMTP_USER || !value.SMTP_PASS) ctx.addIssue({ code: 'custom', path: ['SMTP_HOST'], message: 'Production SMTP requires host, user, and password.' });
   }
   if (value.NODE_ENV !== 'test' && value.MOCK_USDT_ENABLED) ctx.addIssue({ code: 'custom', path: ['MOCK_USDT_ENABLED'], message: 'Mock USDT must be disabled outside test.' });
   try {

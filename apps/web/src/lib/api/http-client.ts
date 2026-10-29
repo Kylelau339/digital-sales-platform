@@ -61,6 +61,28 @@ export const connectClient = {
   async status() { return request<{ account: { stripe_account_id: string; onboarding_status: string } | null }>('/seller/connect/status'); },
   async onboardingLink() { return request<{ url: string }>('/seller/connect/onboarding-link', { method: 'POST', body: JSON.stringify({}) }); }
 };
+export const sellerClient = {
+  async earnings(from?: string, to?: string) {
+    const query = new URLSearchParams(); if (from) query.set('from', from); if (to) query.set('to', to);
+    return request<import('./models').SellerEarnings>(`/seller/earnings${query.size ? `?${query.toString()}` : ''}`);
+  }
+};
+export const complaintClient = {
+  async list() { return request<{ items: import('./models').ComplaintItem[]; total: number }>('/complaints'); },
+  async create(input: { orderId: string; entitlementId?: string | null; reason: string; description: string }, idempotencyKey: string) {
+    return request<{ complaint: import('./models').ComplaintItem }>('/complaints', { method: 'POST', headers: { 'Idempotency-Key': idempotencyKey }, body: JSON.stringify(input) });
+  }
+};
+export const adminClient = {
+  async reviews() { return request<{ items: Array<Record<string, unknown>> }>('/admin/reviews'); },
+  async complaints() { return request<{ items: import('./models').AdminComplaintItem[]; total: number }>('/admin/complaints'); },
+  async complaint(id: string) { return request<Record<string, unknown>>(`/admin/complaints/${encodeURIComponent(id)}`); },
+  async approveRefund(id: string, input: { amountUsdCents: number; reason: string }, idempotencyKey: string) { return request(`/admin/complaints/${encodeURIComponent(id)}/refund/approve`, { method: 'POST', headers: { 'Idempotency-Key': idempotencyKey }, body: JSON.stringify(input) }); },
+  async rejectRefund(id: string, input: { reason: string }, idempotencyKey: string) { return request(`/admin/complaints/${encodeURIComponent(id)}/refund/reject`, { method: 'POST', headers: { 'Idempotency-Key': idempotencyKey }, body: JSON.stringify(input) }); },
+  async takedown(id: string, input: { mode: 'suspend' | 'remove'; reason: string }, idempotencyKey: string) { return request(`/admin/templates/${encodeURIComponent(id)}/takedown`, { method: 'POST', headers: { 'Idempotency-Key': idempotencyKey }, body: JSON.stringify(input) }); },
+  async templates() { return request<{ items: Array<{ id: string; name: import('./models').LocalText; status: string; priceUsdCents: number; version: string; currentVersionId: string | null; sellerId: string; updatedAt: string }> }>('/admin/templates?status=approved'); },
+  async audit() { return request<{ items: Array<Record<string, unknown>> }>('/admin/audit'); }
+};
 export const authClient = {
   async restore(): Promise<SessionUser | null> {
     try {

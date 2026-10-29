@@ -1183,10 +1183,12 @@ function complaintTemplateHTML(c) {
 function complaintsHTML() {
     if (!state.signedIn) return signInGate('cp.title');
     var reasons = ['file_corrupted_or_inaccessible', 'technical_unavailable', 'materially_not_as_described', 'duplicate_purchase', 'unauthorized_distribution', 'copyright', 'trademark', 'malware', 'misleading_license', 'other'];
-    var selected = state.complaintId;
+    var selected = state.complaintDraft && state.complaintDraft.entitlementId ? state.complaintDraft.entitlementId : state.complaintId;
     if (!selected || !state.entitlements.some(function (e) { return e.id === selected; })) {
       selected = state.entitlements.length ? state.entitlements[0].id : '';
     }
+    var draftReason = (state.complaintDraft && state.complaintDraft.reason) || reasons[0];
+    var draftDescription = (state.complaintDraft && state.complaintDraft.description) || '';
     var options = state.entitlements.map(function (ent) {
       var tpl = tplById(ent.templateId);
       return '<option value="' + esc(ent.id) + '"' + (ent.id === selected ? ' selected' : '') + '>' +
@@ -1203,14 +1205,14 @@ function complaintsHTML() {
           '<p class="cp-card-title">' + esc(t('cp.new')) + '</p>' +
           (state.entitlements.length
             ? '<div class="field"><label class="field-label" for="cp-ent">' + esc(t('cp.selectOrder')) + '</label>' +
-              '<select class="select" id="cp-ent">' + options + '</select></div>' +
+              '<select class="select" id="cp-ent" data-complaint="entitlementId">' + options + '</select></div>' +
               '<div class="field"><p class="field-label">' + esc(t('cp.reason')) + '</p>' +
                 '<div class="reason-list">' + reasons.map(function (r, i) {
-                  return '<label class="check-item"><input type="radio" name="cp-reason" value="' + r + '"' + (i === 0 ? ' checked' : '') + ' />' +
+                  return '<label class="check-item"><input type="radio" name="cp-reason" value="' + r + '" data-complaint="reason"' + (r === draftReason ? ' checked' : '') + ' />' +
                     '<span class="check-text">' + esc(t('cp.reason.' + r)) + '</span></label>';
                 }).join('') + '</div></div>' +
               '<div class="field"><label class="field-label" for="cp-detail">' + esc(t('cp.detail')) + '</label>' +
-                '<textarea class="textarea" id="cp-detail" rows="5" placeholder="' + esc(t('cp.detailHint')) + '"></textarea>' +
+                '<textarea class="textarea" id="cp-detail" rows="5" data-complaint="description" placeholder="' + esc(t('cp.detailHint')) + '">' + esc(draftDescription) + '</textarea>' +
                 '<p class="field-hint">' + esc(t('cp.detailHint')) + '</p></div>' +
               (state.cpError ? '<p class="field-error">' + icon('alert') + esc(state.cpError) + '</p>' : '') +
               '<div class="od-cluster" style="justify-content:space-between;margin-top:4px">' +
@@ -1231,11 +1233,113 @@ function complaintsHTML() {
       '</section>';
   }
 
+  function earningsHTML() {
+    if (!state.signedIn) return signInGate('earn.title');
+    var e = state.earnings;
+    var head = '<div class="sell-head"><div><p class="eyebrow">' + esc(t('earn.eyebrow')) + '</p>' +
+      '<h1 class="sell-title">' + esc(t('earn.title')) + '</h1>' +
+      '<p class="sell-sub">' + esc(t('earn.sub')) + '</p></div>' +
+      '<button type="button" class="btn btn-secondary" data-action="go-sell">' + esc(t('sell.backToMarket')) + '</button></div>';
+    if (!e) {
+      return '<section class="shell section">' + head + '<div class="empty" style="margin-top:28px">' + icon('clock') +
+        '<p class="empty-title">' + esc(t('earn.loading')) + '</p></div></section>';
+    }
+    var s = e.summary || {};
+    var ranges = [7, 30, 90, 365].map(function (days) {
+      return '<button type="button" class="tab" data-action="set-earnings-range" data-value="' + days + '" aria-pressed="' + ((state.earningsRange || 30) === days) + '">' + esc(t('earn.range', { n: days })) + '</button>';
+    }).join('');
+    var metrics = '<div class="metric-strip">' +
+      '<div class="metric"><span class="metric-key">' + esc(t('earn.gross')) + '</span><span class="metric-num">' + money(s.grossSalesCents || 0) + '</span></div>' +
+      '<div class="metric"><span class="metric-key">' + esc(t('earn.fees')) + '</span><span class="metric-num">' + money(s.platformFeeCents || 0) + '</span></div>' +
+      '<div class="metric"><span class="metric-key">' + esc(t('earn.refunds')) + '</span><span class="metric-num">' + money(s.refundsCents || 0) + '</span></div>' +
+      '<div class="metric"><span class="metric-key">' + esc(t('earn.net')) + '</span><span class="metric-num">' + money(s.netEarningsCents || 0) + '</span></div>' +
+      '<div class="metric"><span class="metric-key">' + esc(t('earn.orders')) + '</span><span class="metric-num">' + esc(s.orderCount || 0) + '</span></div>' +
+      '<div class="metric"><span class="metric-key">' + esc(t('earn.units')) + '</span><span class="metric-num">' + esc(s.unitCount || 0) + '</span></div>' +
+      '</div>';
+    var seriesRows = (e.series || []).map(function (row) {
+      return '<div class="queue-row"><div class="queue-main"><p class="queue-title">' + esc(row.date) + '</p>' +
+        '<p class="queue-sub">' + esc(t('earn.ordersUnits', { orders: row.orderCount, units: row.unitCount })) + '</p></div>' +
+        '<div class="queue-cell"><span class="queue-cell-key">' + esc(t('earn.gross')) + '</span><span class="queue-value od-nowrap">' + money(row.grossSalesCents) + '</span></div>' +
+        '<div class="queue-cell"><span class="queue-cell-key">' + esc(t('earn.refunds')) + '</span><span class="queue-value od-nowrap">' + money(row.refundsCents) + '</span></div>' +
+        '<div class="queue-cell"><span class="queue-cell-key">' + esc(t('earn.net')) + '</span><span class="queue-value od-nowrap">' + money(row.netEarningsCents) + '</span></div></div>';
+    }).join('');
+    var templateRows = (e.templates || []).map(function (row) {
+      var name = row.name ? L(row.name) : row.templateId;
+      return '<div class="queue-row"><div class="queue-main"><p class="queue-title">' + esc(name) + '</p>' +
+        '<p class="queue-sub">' + esc(row.templateId) + '</p></div>' +
+        '<div class="queue-cell"><span class="queue-cell-key">' + esc(t('earn.units')) + '</span><span class="queue-value">' + esc(row.unitCount) + '</span></div>' +
+        '<div class="queue-cell"><span class="queue-cell-key">' + esc(t('earn.gross')) + '</span><span class="queue-value od-nowrap">' + money(row.grossSalesCents) + '</span></div>' +
+        '<div class="queue-cell"><span class="queue-cell-key">' + esc(t('earn.refunds')) + '</span><span class="queue-value od-nowrap">' + money(row.refundsCents) + '</span></div>' +
+        '<div class="queue-cell"><span class="queue-cell-key">' + esc(t('earn.net')) + '</span><span class="queue-value od-nowrap">' + money(row.netEarningsCents) + '</span></div></div>';
+    }).join('');
+    var orderRows = (e.recentOrders || []).map(function (row) {
+      var name = row.templateName ? L(row.templateName) : row.templateId;
+      return '<div class="queue-row"><div class="queue-main"><p class="queue-title">' + esc(row.orderNo) + ' · ' + esc(name) + '</p>' +
+        '<p class="queue-sub">' + esc(row.paidAt || '') + ' · ' + esc(licLabel(row.licenseType)) + '</p></div>' +
+        '<div class="queue-cell"><span class="queue-cell-key">' + esc(t('earn.gross')) + '</span><span class="queue-value od-nowrap">' + money(row.priceCents) + '</span></div>' +
+        '<div class="queue-cell"><span class="queue-cell-key">' + esc(t('earn.net')) + '</span><span class="queue-value od-nowrap">' + money(row.sellerAmountCents) + '</span></div>' +
+        '<div class="queue-cell">' + statusBadge(row.paymentStatus) + '</div></div>';
+    }).join('');
+    return '<section class="shell section">' + head +
+      '<div class="tabs" style="margin-top:24px">' + ranges + '</div>' +
+      '<p class="section-note" style="margin-top:8px">' + esc(t('earn.rangeNote', { from: e.from, to: e.to })) + '</p>' +
+      metrics +
+      '<div class="adm-records-grid" style="margin-top:24px">' +
+        '<div class="adm-block"><p class="adm-block-title">' + esc(t('earn.byTemplate')) + '</p>' + (templateRows || '<p class="panel-text">' + esc(t('earn.empty')) + '</p>') + '</div>' +
+        '<div class="adm-block"><p class="adm-block-title">' + esc(t('earn.byDate')) + '</p>' + (seriesRows || '<p class="panel-text">' + esc(t('earn.empty')) + '</p>') + '</div>' +
+        '<div class="adm-block"><p class="adm-block-title">' + esc(t('earn.recent')) + '</p>' + (orderRows || '<p class="panel-text">' + esc(t('earn.empty')) + '</p>') + '</div>' +
+      '</div></section>';
+  }
+
+  function refundDialogHTML(detail, mode) {
+    var complaint = detail.complaint || {};
+    var order = detail.order || {};
+    var evaluation = detail.evaluation || {};
+    var blockers = (evaluation.blockers || []).map(function (b) { return '<li>' + esc(t('adm.refundBlock.' + b)) + '</li>'; }).join('');
+    var amount = evaluation.fullRefundCents || order.paymentAmountMinor || 0;
+    var title = mode === 'reject' ? t('adm.refundRejectTitle') : t('adm.refundTitle');
+    var body = '<p class="dlg-text">' + esc(complaint.id || '') + ' · ' + esc(order.orderNo || '') + '</p>' +
+      '<div class="summary-table">' +
+        '<div class="summary-row"><span>' + esc(t('earn.gross')) + '</span><span class="summary-value">' + money(order.priceCents || 0) + '</span></div>' +
+        '<div class="summary-row"><span>' + esc(t('earn.fees')) + '</span><span class="summary-value">' + money(order.platformFeeCents || 0) + '</span></div>' +
+        '<div class="summary-row"><span>' + esc(t('earn.net')) + '</span><span class="summary-value">' + money(order.sellerAmountCents || 0) + '</span></div>' +
+        '<div class="summary-row"><span>' + esc(t('adm.refundAmount')) + '</span><span class="summary-value">' + money(amount) + '</span></div>' +
+      '</div>' +
+      (mode === 'reject' ? '' : '<p class="field-hint">' + esc(t('adm.refundFullNote')) + '</p>') +
+      (blockers ? '<div class="gate-note" style="margin-top:12px"><ul class="gate-list">' + blockers + '</ul></div>' : '') +
+      '<div class="field" style="margin-top:16px"><label class="field-label" for="refund-reason">' + esc(t('adm.refundReason')) + '</label>' +
+      '<textarea class="textarea" id="refund-reason" rows="3" placeholder="' + esc(t('adm.refundReasonHint')) + '"></textarea></div>' +
+      '<div class="dlg-actions">' +
+      '<button type="button" class="btn btn-ghost" data-action="close-dialog">' + esc(t('common.close')) + '</button>' +
+      (mode === 'reject'
+        ? '<button type="button" class="btn btn-danger" data-action="refund-confirm-reject" data-id="' + esc(complaint.id || '') + '">' + esc(t('adm.refundReject')) + '</button>'
+        : '<button type="button" class="btn btn-primary" data-action="refund-confirm-approve" data-id="' + esc(complaint.id || '') + '" data-amount="' + esc(amount) + '"' + ((blockers || evaluation.eligible === false) ? ' disabled' : '') + '>' + esc(t('adm.refundConfirm')) + '</button>') +
+      '</div>';
+    return '<h2 class="dlg-title">' + esc(title) + '</h2>' + body;
+  }
+
+  function takedownDialogHTML(template) {
+    var name = template && template.name ? L(template.name) : (template && template.id) || '';
+    return '<h2 class="dlg-title">' + esc(t('adm.takedownTitle')) + '</h2>' +
+      '<p class="dlg-text">' + esc(name) + ' · ' + esc(template && template.version ? 'v' + template.version : '') + '</p>' +
+      '<div class="field"><p class="field-label">' + esc(t('adm.takedownMode')) + '</p>' +
+        '<label class="check-item"><input type="radio" name="takedown-mode" value="suspend" checked /><span class="check-text">' + esc(t('adm.takedownSuspend')) + '</span></label>' +
+        '<label class="check-item"><input type="radio" name="takedown-mode" value="remove" /><span class="check-text">' + esc(t('adm.takedownRemove')) + '</span></label>' +
+      '</div>' +
+      '<p class="field-hint">' + esc(t('adm.takedownEffect')) + '</p>' +
+      '<div class="field" style="margin-top:12px"><label class="field-label" for="takedown-reason">' + esc(t('adm.takedownReason')) + '</label>' +
+        '<textarea class="textarea" id="takedown-reason" rows="3" placeholder="' + esc(t('adm.takedownReasonPlaceholder')) + '"></textarea>' +
+        '<p class="field-hint">' + esc(t('adm.takedownReasonHint')) + '</p></div>' +
+      '<div class="dlg-actions"><button type="button" class="btn btn-ghost" data-action="close-dialog">' + esc(t('common.cancel')) + '</button>' +
+        '<button type="button" class="btn btn-danger" data-action="takedown-confirm" data-id="' + esc(template && template.id || '') + '">' + esc(t('adm.takedownConfirm')) + '</button></div>';
+  }
+
 function adminHTML() {
     if (!state.signedIn) return signInGate('adm.title');
+    if (state.isAdmin === false) return signInGate('ui.forbidden');
     if (state.admin.selected) return adminDetailHTML();
     return state.admin.tab === 'records' ? adminRecordsHTML() : adminQueueHTML();
-  }
+}
 
 function adminDetailHTML() {
     var sub = null;
@@ -1383,43 +1487,46 @@ function submissionBlockers(sub) {
   }
 
 function adminRecordsHTML() {
-    var open = state.complaints.filter(function (c) { return c.status !== 'resolved' && c.status !== 'rejected'; });
-    var live = D.templates.filter(function (tpl) { return tpl.status === 'approved'; }).slice(0, 6);
+    var items = (state.admin && state.admin.complaints) || [];
+    var open = items.filter(function (item) { return item.complaint.status !== 'resolved' && item.complaint.status !== 'rejected'; });
+    var templates = (state.admin && state.admin.templates) || [];
+    var audit = (state.audit || []).slice(0, 5).map(function (a) {
+      var diff = a.diff || [];
+      return '<div class="adm-audit"><div class="od-cluster" style="justify-content:space-between">' +
+        '<span class="panel-key">' + esc(a.id) + ' · ' + esc(a.targetId || '') + '</span>' +
+        '<span class="panel-key">' + esc(a.at) + '</span></div>' +
+        '<p class="field-hint" style="margin-top:2px">' + esc(t('adm.auditActor')) + ': ' + esc(a.actor) + '</p>' +
+        '<table class="diff-table"><thead><tr><th>' + esc(t('adm.field')) + '</th><th>' + esc(t('adm.before')) + '</th><th>' + esc(t('adm.after')) + '</th></tr></thead><tbody>' +
+        diff.map(function (d) { return '<tr><td>' + esc(d.field) + '</td><td>' + esc(d.before) + '</td><td>' + esc(d.after) + '</td></tr>'; }).join('') +
+        '</tbody></table></div>';
+    }).join('');
 
-    var complaints = open.length ? open.map(function (c) {
-      var tpl = tplById(c.templateId);
-      return '<div class="adm-record">' +
-        '<div class="od-fill"><p class="queue-title">' + esc(tpl ? L(tpl.name) : c.templateId) + '</p>' +
-          '<p class="queue-sub">' + esc(c.id) + ' · ' + esc(c.orderId) + ' · ' + esc(t('cp.reason.' + c.reason)) + '</p></div>' +
-        statusBadge(c.status) +
-        '<div class="od-cluster">' +
-          '<button type="button" class="btn btn-primary btn-sm" data-action="refund-open" data-id="' + esc(c.id) + '">' + esc(t('adm.refundAction')) + '</button>' +
-          '<button type="button" class="btn btn-ghost btn-sm" data-action="refund-reject" data-id="' + esc(c.id) + '">' + esc(t('adm.refundReject')) + '</button>' +
-        '</div></div>';
+    var complaints = open.length ? open.map(function (item) {
+      var c = item.complaint; var order = item.order || {};
+      var name = item.templateName ? L(item.templateName) : c.templateId;
+      var refund = item.refund;
+      var actions = refund && (refund.status === 'pending' || refund.status === 'succeeded')
+        ? statusBadge(refund.status === 'succeeded' ? 'passed' : 'pending', refund.status === 'succeeded' ? 'adm.refundDone' : 'adm.refundPending')
+        : '<div class="od-cluster"><button type="button" class="btn btn-primary btn-sm" data-action="refund-open" data-id="' + esc(c.id) + '">' + esc(t('adm.refundAction')) + '</button>' +
+          '<button type="button" class="btn btn-ghost btn-sm" data-action="refund-reject" data-id="' + esc(c.id) + '">' + esc(t('adm.refundReject')) + '</button></div>';
+      return '<div class="adm-record"><div class="od-fill"><p class="queue-title">' + esc(name) + '</p>' +
+        '<p class="queue-sub">' + esc(c.id) + ' · ' + esc(order.orderNo || c.orderId) + ' · ' + esc(t('cp.reason.' + c.reason)) + '</p>' +
+        '<p class="queue-sub">' + esc(item.buyerEmail || '') + ' · ' + esc(t('earn.downloads', { n: item.downloadCount || 0 })) + '</p></div>' +
+        statusBadge(c.status) + actions + '</div>';
     }).join('') : '<p class="panel-text">' + esc(t('adm.noneOpen')) + '</p>';
 
-    var liveRows = live.length ? live.map(function (tpl) {
-      return '<div class="adm-record"><div class="od-fill"><p class="queue-title">' + esc(L(tpl.name)) + '</p>' +
+    var liveRows = templates.length ? templates.map(function (tpl) {
+      var name = tpl.name ? L(tpl.name) : tpl.id;
+      return '<div class="adm-record"><div class="od-fill"><p class="queue-title">' + esc(name) + '</p>' +
         '<p class="queue-sub">' + esc(tpl.id) + ' · v' + esc(tpl.version) + ' · ' + money(tpl.priceUsdCents) + '</p></div>' +
         statusBadge('active', 'adm.takedownLive') +
         '<button type="button" class="btn btn-danger btn-sm" data-action="takedown-open" data-id="' + esc(tpl.id) + '">' + esc(t('adm.takedown')) + '</button></div>';
     }).join('') : '<p class="panel-text">' + esc(t('adm.empty')) + '</p>';
 
-    var audit = state.audit.slice(0, 5).map(function (a) {
-      return '<div class="adm-audit"><div class="od-cluster" style="justify-content:space-between">' +
-        '<span class="panel-key">' + esc(a.id) + ' · ' + esc(a.targetType) + ' ' + esc(a.targetId) + '</span>' +
-        '<span class="panel-key">' + esc(a.at) + '</span></div>' +
-        '<p class="field-hint" style="margin-top:2px">' + esc(t('adm.auditActor')) + ': ' + esc(a.actor) + '</p>' +
-        '<table class="diff-table"><thead><tr><th>' + esc(t('adm.field')) + '</th><th>' + esc(t('adm.before')) + '</th><th>' + esc(t('adm.after')) + '</th></tr></thead><tbody>' +
-        a.diff.map(function (d) {
-          return '<tr><td>' + esc(d.field) + '</td><td>' + esc(d.before) + '</td><td>' + esc(d.after) + '</td></tr>';
-        }).join('') + '</tbody></table></div>';
-    }).join('');
-
     return adminShellHTML(
       '<div class="adm-records-grid">' +
         '<div class="adm-block"><p class="adm-block-title">' + esc(t('adm.complaintQueue')) + '</p>' + complaints + '</div>' +
-        '<div class="adm-block"><p class="adm-block-title">' + esc(t('adm.audit')) + '</p>' + audit + '</div>' +
+        '<div class="adm-block"><p class="adm-block-title">' + esc(t('adm.audit')) + '</p>' + (audit || '<p class="panel-text">' + esc(t('adm.empty')) + '</p>') + '</div>' +
         '<div class="adm-block"><p class="adm-block-title">' + esc(t('adm.liveTitles')) + '</p>' + liveRows + '</div>' +
       '</div>'
     );
@@ -1438,5 +1545,5 @@ function freshSell() {
       submitted: false, manualReview: false
     };
   }
-return { render(options) { state = Object.assign(state, options); state.sell = state.sell || freshSell(); state.cpError = ''; const views = {market:marketHTML,detail:detailHTML,seller:sellHTML,library:libraryHTML,complaints:complaintsHTML,admin:adminHTML}; return (views[state.route] || detailHTML)(); }, translate(key, vars) { return t(key, vars); }, policy: refundSummaryHTML };
+return { render(options) { state = Object.assign(state, options); state.sell = state.sell || freshSell(); state.cpError = ''; const views = {market:marketHTML,detail:detailHTML,seller:sellHTML,library:libraryHTML,complaints:complaintsHTML,admin:adminHTML,earnings:earningsHTML}; return (views[state.route] || detailHTML)(); }, translate(key, vars) { return t(key, vars); }, policy: refundSummaryHTML, refundDialog: refundDialogHTML, takedownDialog: takedownDialogHTML };
 }

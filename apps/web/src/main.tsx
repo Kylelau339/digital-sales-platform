@@ -6,7 +6,7 @@ import './styles.css';
 import './m0.css';
 import { initI18n, resources } from './lib/i18n/i18n';
 import { fixtureMode, loadDesignData } from './lib/api/client';
-import { authClient, commerceClient, connectClient, request, type SessionUser } from './lib/api/http-client';
+import { authClient, commerceClient, connectClient, adminClient, complaintClient, sellerClient, request, type SessionUser } from './lib/api/http-client';
 import { readPreference, savePreference } from './lib/preferences';
 import { headerHTML, footerHTML } from './presentation/chrome';
 import { createPresentation } from './presentation/render-functions.js';
@@ -52,20 +52,47 @@ function FinalDesign() {
   const [tab, setTab] = useState('overview'); const [licenseChoice, setLicenseChoice] = useState<Record<string, string>>({});
   const [currency, setCurrency] = useState('USD'); const [complaintId, setComplaintId] = useState<string | null>(null);
   const [adminTab, setAdminTab] = useState('queue'); const [adminSelected, setAdminSelected] = useState<string | null>(null); const [adminReason, setAdminReason] = useState('');
+  const [adminComplaints, setAdminComplaints] = useState<import('./lib/api/models').AdminComplaintItem[]>([]);
+  const [adminTemplates, setAdminTemplates] = useState<Array<{ id: string; name: { en?: string; zh?: string }; status: string; priceUsdCents: number; version: string; currentVersionId: string | null; sellerId: string; updatedAt: string }>>([]);
+  const [adminAudit, setAdminAudit] = useState<import('./lib/api/models').AuditItem[]>([]);
+  const [earnings, setEarnings] = useState<import('./lib/api/models').SellerEarnings | null>(null); const [earningsRange, setEarningsRange] = useState(30);
+  const [complaintDraft, setComplaintDraft] = useState<{ entitlementId: string; reason: string; description: string }>({ entitlementId: '', reason: 'materially_not_as_described', description: '' });
+  const [dialogTitle, setDialogTitle] = useState(''); const [dialogBusy, setDialogBusy] = useState(false);
   const [connectState, setConnectState] = useState<'idle'|'creating'|'pending'|'restricted'|'active'>('idle');
   const [connectAccountId, setConnectAccountId] = useState('');
   const [sell, setSell] = useState<Record<string, unknown>>({ name: '', category: '', summary: '', priceCents: '', previews: [], pkgName: '', pkgSize: 0, pkgFileName: '', pkgFile: null, scanning: false, scanned: false, scanJobId: '', scanStatus: '', scanFindings: [], scanDetected: '', scanExcerpt: '', parserStatus: '', licenseType: '', decl: [false, false, false], signer: '', signDate: new Date().toISOString().slice(0, 10), proofFiles: [], proofFileObjects: [], proofLink: '', urlStatus: '', urlCapturedAt: '', urlSummary: '', errors: {}, showErrors: false, submitted: false, manualReview: false, templateId: '', versionId: '' });
   const [toast, setToast] = useState(''); const [dialogContent, setDialogContent] = useState(''); const infoDialog = useRef<HTMLDialogElement>(null);
-  const route = location.pathname.startsWith('/templates/') ? 'detail' : ({ '/': 'market', '/seller': 'seller', '/library': 'library', '/complaints': 'complaints', '/admin': 'admin' } as Record<string, string>)[location.pathname] ?? 'notfound';
+  const route = location.pathname.startsWith('/templates/') ? 'detail' : ({ '/': 'market', '/seller': 'seller', '/seller/earnings': 'earnings', '/library': 'library', '/complaints': 'complaints', '/admin': 'admin' } as Record<string, string>)[location.pathname] ?? 'notfound';
   const detailId = route === 'detail' ? decodeURIComponent(location.pathname.slice('/templates/'.length)) : null;
   useEffect(() => { let active = true; setError(''); void loadDesignData().then(value => { if (active) setData(value); }).catch(reason => { if (active) setError(reason instanceof Error ? reason.message : t('ui.error')); }); return () => { active = false; }; }, [attempt]);
   useEffect(() => { let active = true; void authClient.restore().then(async value => { if (!active) return; setUser(value); if (value && location.pathname === '/library') { try { const result = await commerceClient.entitlements(); if (active) setData(old => old ? { ...old, entitlements: result.items } : old); } catch { if (active) setToast(t('ui.error')); } } if (value?.roles.includes('seller') && value.authStatus === 'verified') { try { const result = await connectClient.status(); if (result.account) { setConnectAccountId(result.account.stripe_account_id); setConnectState(result.account.onboarding_status as 'pending'|'restricted'|'active'); } } catch { /* Seller status remains unknown until the next explicit action. */ } } }).catch(() => {}); return () => { active = false; }; }, []);
-  useEffect(() => { let active = true; if (route === 'library' && user && !fixtureMode) void commerceClient.entitlements().then(result => { if (active) setData(old => old ? { ...old, entitlements: result.items } : old); }).catch(reason => { if (active) setToast(reason instanceof Error ? reason.message : t('ui.error')); }); return () => { active = false; }; }, [route, user]);
+  const isAdmin = Boolean(user?.roles.includes('admin')); const isSeller = Boolean(user?.roles.includes('seller'));
+  useEffect(() => { let active = true; if (fixtureMode || !user) return; void (async () => {
+    try {
+      if (route === 'library' || route === 'complaints') {
+        const [entitlements, complaints] = await Promise.all([commerceClient.entitlements(), complaintClient.list()]);
+        if (active) setData(old => old ? { ...old, entitlements: entitlements.items, complaints: complaints.items } : old);
+      }
+      if (route === 'admin' && isAdmin) {
+        const [reviews, complaints, audit, templates] = await Promise.all([adminClient.reviews(), adminClient.complaints(), adminClient.audit(), adminClient.templates()]);
+        if (!active) return;
+        const submissions = reviews.items.map(item => ({ id: String(item.versionId), title: { en: String(item.versionId) }, seller: '', submittedAt: '', parserStatus: '', scanStatus: '', scanJobId: '', conflictFlag: false, conflictReasons: [], urlAuthorityStatus: '', pageSummary: null, packageLicense: { file: null, excerpt: null } }));
+        setAdminComplaints(complaints.items); setAdminTemplates(templates.items);
+        setAdminAudit(audit.items.map(item => ({ id: String(item.id), at: String(item.at), actor: String((item.actor as { id?: string } | undefined)?.id ?? ''), targetId: String(item.targetId ?? ''), diff: (item.diff as Array<{ field: string; before: string; after: string }> | undefined) ?? [] })));
+        setData(old => old ? { ...old, submissions, audit: audit.items.map(item => ({ id: String(item.id), at: String(item.at), actor: String((item.actor as { id?: string } | undefined)?.id ?? ''), targetId: String(item.targetId ?? ''), diff: (item.diff as Array<{ field: string; before: string; after: string }> | undefined) ?? [] })) } : old);
+      }
+      if (route === 'earnings' && isSeller) {
+        const to = new Date(); const from = new Date(to.getTime() - earningsRange * 24 * 60 * 60 * 1000);
+        const result = await sellerClient.earnings(from.toISOString().slice(0, 10), to.toISOString().slice(0, 10));
+        if (active) setEarnings(result);
+      }
+    } catch (reason) { if (active) setToast(reason instanceof Error ? reason.message : t('ui.error')); }
+  })(); return () => { active = false; }; }, [route, user, attempt, earningsRange, isAdmin, isSeller, t]);
   useEffect(() => { document.documentElement.dataset.theme = theme; document.documentElement.dataset.themePreference = theme; savePreference('mb-theme', theme); }, [theme]);
   useEffect(() => { document.documentElement.lang = i18n.language; document.title = t('app.title'); savePreference('mb-language', i18n.language); }, [i18n.language, t]);
   useEffect(() => { if (!toast) return; const timer = window.setTimeout(() => setToast(''), 5000); return () => clearTimeout(timer); }, [toast]);
   const presentation = useMemo(() => data ? createPresentation(data, dictionaries) : null, [data]);
-  const options = { lang: i18n.language, route, loading: !data, listError: Boolean(error), detailId, detailMode: 'approved', tab, licenseChoice, currency, signedIn: fixtureMode || Boolean(user), filters, heroEnter: false, entitlements: data?.entitlements ?? [], complaints: data?.complaints ?? [], audit: data?.audit ?? [], admin: { tab: adminTab, selected: adminSelected, reason: adminReason, queue: data?.submissions ?? [] }, complaintId, sell, connectState };
+  const options = { lang: i18n.language, route, loading: !data, listError: Boolean(error), detailId, detailMode: 'approved', tab, licenseChoice, currency, signedIn: fixtureMode || Boolean(user), filters, heroEnter: false, entitlements: data?.entitlements ?? [], complaints: data?.complaints ?? [], audit: (adminAudit.length ? adminAudit : data?.audit) ?? [], admin: { tab: adminTab, selected: adminSelected, reason: adminReason, queue: data?.submissions ?? [], complaints: adminComplaints.length ? adminComplaints : (data?.adminComplaints ?? []), templates: adminTemplates.length ? adminTemplates : (data?.adminTemplates ?? []) }, complaintId, complaintDraft, sell, connectState, earnings: earnings ?? data?.earnings ?? null, earningsRange, isAdmin: fixtureMode || isAdmin, isSeller: fixtureMode || isSeller };
   let html = '';
   try { html = presentation ? presentation.render(options) : `<section class="shell section"><div class="empty"><p class="empty-title">${t(error ? 'market.errorTitle' : 'common.loading')}</p><button class="btn btn-secondary" data-action="retry-list">${t('market.retry')}</button></div></section>`; }
   catch (reason) { html = `<section class="shell section"><div class="empty"><p class="empty-title">${t('market.errorTitle')}</p></div></section>`; console.error('Presentation error', reason); }
@@ -78,7 +105,7 @@ function FinalDesign() {
     node.querySelectorAll<HTMLElement>('[data-action="set-lang"]').forEach(element => element.setAttribute('aria-pressed', String(element.dataset.lang === i18n.language)));
     node.querySelectorAll<HTMLElement>('[data-action="set-category"]').forEach(element => element.setAttribute('aria-pressed', String(element.dataset.value === filters.category)));
     const search = node.querySelector<HTMLInputElement>('#q-header'); if (search) { search.placeholder = t('search.placeholder'); search.value = filters.q; }
-    for (const action of ['go-library', 'go-admin']) node.querySelectorAll<HTMLElement>(`[data-action="${action}"]`).forEach(element => { element.hidden = !fixtureMode && (!user || (action === 'go-admin' && !user.roles.includes('admin'))); });
+    for (const action of ['go-library', 'go-admin', 'go-earnings']) node.querySelectorAll<HTMLElement>(`[data-action="${action}"]`).forEach(element => { element.hidden = !fixtureMode && (!user || (action === 'go-admin' && !user.roles.includes('admin')) || (action === 'go-earnings' && !user.roles.includes('seller'))); });
     node.querySelectorAll<HTMLButtonElement>('[data-action="buy"]').forEach(element => { element.disabled = checkoutBusy; });
     node.querySelectorAll<HTMLButtonElement>('[data-action="download-ent"]').forEach(element => { element.disabled = element.dataset.available !== 'true' || downloadBusy === element.dataset.ent; });
     const login = node.querySelector<HTMLElement>('[data-action="login"]'); if (login && user) login.textContent = user.displayName;
@@ -184,6 +211,49 @@ function FinalDesign() {
     try { await request(`/admin/reviews/${versionId}/${decision}`, { method: 'POST', body: JSON.stringify({ reason: adminReason || (decision === 'approve' ? 'All evidence is valid' : 'Please revise the submission') }) }); setToast(t('ui.saved')); setAttempt(old => old + 1); setAdminSelected(null); }
     catch (error) { setToast(error instanceof Error ? error.message : t('ui.error')); }
   }
+  function openDialog(title: string, content: string) { setDialogTitle(title); setDialogContent(content); queueMicrotask(() => infoDialog.current?.showModal()); }
+  async function openRefund(id: string, mode: 'approve' | 'reject') {
+    try { const detail = await adminClient.complaint(id); if (presentation) openDialog('', presentation.refundDialog(detail, mode)); }
+    catch (reason) { setToast(reason instanceof Error ? reason.message : t('ui.error')); }
+  }
+  async function confirmRefund(mode: 'approve' | 'reject', id: string, amount: number) {
+    if (!id) { setToast(t('ui.error')); return; }
+    const reason = (document.getElementById('refund-reason') as HTMLTextAreaElement | null)?.value.trim() ?? '';
+    if (reason.length < 8) { setToast(t('adm.refundReasonHint')); return; }
+    setDialogBusy(true);
+    try {
+      if (mode === 'approve') await adminClient.approveRefund(id, { amountUsdCents: amount, reason }, crypto.randomUUID());
+      else await adminClient.rejectRefund(id, { reason }, crypto.randomUUID());
+      infoDialog.current?.close(); setToast(t(mode === 'approve' ? 'adm.refundDone' : 'adm.refundRejectedToast')); setAttempt(old => old + 1);
+    } catch (error) { setToast(error instanceof Error ? error.message : t('ui.error')); }
+    finally { setDialogBusy(false); }
+  }
+  function openTakedown(id: string) {
+    const all = (adminTemplates.length ? adminTemplates : (data?.adminTemplates as typeof adminTemplates | undefined) ?? []);
+    const template = all.find(item => item.id === id);
+    if (!template) { setToast(t('ui.error')); return; }
+    if (presentation) openDialog('', presentation.takedownDialog(template));
+  }
+  async function confirmTakedown(id: string) {
+    const mode = (document.querySelector('input[name="takedown-mode"]:checked') as HTMLInputElement | null)?.value === 'remove' ? 'remove' : 'suspend';
+    const reason = (document.getElementById('takedown-reason') as HTMLTextAreaElement | null)?.value.trim() ?? '';
+    if (reason.length < 8) { setToast(t('adm.takedownReasonHint')); return; }
+    setDialogBusy(true);
+    try { await adminClient.takedown(id, { mode, reason }, crypto.randomUUID()); infoDialog.current?.close(); setToast(t('adm.takedownDone', { id })); setAttempt(old => old + 1); }
+    catch (error) { setToast(error instanceof Error ? error.message : t('ui.error')); }
+    finally { setDialogBusy(false); }
+  }
+  async function submitComplaint() {
+    const entitlement = (data?.entitlements as Array<{ id: string; orderId: string }> | undefined)?.find(item => item.id === (complaintDraft.entitlementId || (data?.entitlements as Array<{ id: string }> | undefined)?.[0]?.id));
+    if (!entitlement) { setToast(t('cp.noOrder')); return; }
+    if (complaintDraft.description.trim().length < 8) { setToast(t('cp.errDetail')); return; }
+    setDialogBusy(true);
+    try {
+      await complaintClient.create({ orderId: entitlement.orderId, entitlementId: entitlement.id, reason: complaintDraft.reason, description: complaintDraft.description.trim() }, crypto.randomUUID());
+      setComplaintDraft(old => ({ ...old, description: '' })); setToast(t('cp.submitSuccess')); setAttempt(old => old + 1);
+    } catch (error) { setToast(error instanceof Error ? error.message : t('ui.error')); }
+    finally { setDialogBusy(false); }
+  }
   function startScan() { void runM1Upload(); }
   async function runM1Upload() {
     const state = sell;
@@ -208,6 +278,8 @@ function FinalDesign() {
     if (action === 'go-sell') return go('/seller');
     if (action === 'go-library') return go('/library');
     if (action === 'go-admin') return go('/admin');
+    if (action === 'go-earnings') return go('/seller/earnings');
+    if (action === 'set-earnings-range') { setEarnings(null); setEarningsRange(Number(value) || 30); return; }
     if (action === 'go-complaint') { setComplaintId(element.dataset.ent ?? null); return go('/complaints'); }
     if (action === 'go-detail') { setTab('overview'); return go(`/templates/${encodeURIComponent(id ?? '')}`); }
     if (action === 'buy') { if (id) void beginCheckout(id); return; }
@@ -233,13 +305,20 @@ function FinalDesign() {
     if (action === 'sell-submit') { void submitM1Review(); return; }
     if (action === 'admin-approve') { void reviewDecision('approve'); return; }
     if (action === 'admin-reject') { void reviewDecision('reject'); return; }
+    if (action === 'refund-open') { if (id) void openRefund(id, 'approve'); return; }
+    if (action === 'refund-reject') { if (id) void openRefund(id, 'reject'); return; }
+    if (action === 'refund-confirm-approve') { void confirmRefund('approve', id ?? '', Number(element.dataset.amount ?? 0)); return; }
+    if (action === 'refund-confirm-reject') { void confirmRefund('reject', id ?? '', 0); return; }
+    if (action === 'takedown-open') { if (id) openTakedown(id); return; }
+    if (action === 'takedown-confirm') { if (id) void confirmTakedown(id); return; }
+    if (action === 'submit-complaint') { void submitComplaint(); return; }
     if (action === 'sell-save-draft') { setToast(t('ui.saved')); return; }
     if (action === 'sell-add-proof' || action === 'sell-add-pending' || action === 'sell-seed-preview' || action === 'sell-remove-proof') { setToast(t('ui.saved')); return; }
     if (action === 'focus-entitlement') return document.getElementById(`ent-${element.dataset.ent}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     if (action === 'login') return setAuthOpen(true);
     if (action === 'close-dialog') return infoDialog.current?.close();
-    if (action === 'open-refund' && presentation) { setDialogContent(presentation.policy()); queueMicrotask(() => infoDialog.current?.showModal()); return; }
-    if (action === 'open-license-guide') { setDialogContent(`<p class="dlg-text">${t('guide.p1')}</p><p class="dlg-text">${t('guide.p2')}</p>`); queueMicrotask(() => infoDialog.current?.showModal()); return; }
+    if (action === 'open-refund' && presentation) { setDialogTitle(t('footer.refundPolicy')); setDialogContent(presentation.policy()); queueMicrotask(() => infoDialog.current?.showModal()); return; }
+    if (action === 'open-license-guide') { setDialogTitle(t('footer.licenseGuide')); setDialogContent(`<p class="dlg-text">${t('guide.p1')}</p><p class="dlg-text">${t('guide.p2')}</p>`); queueMicrotask(() => infoDialog.current?.showModal()); return; }
     showUnavailable();
   }
   function change(event: ChangeEvent<HTMLDivElement>) {
@@ -248,12 +327,13 @@ function FinalDesign() {
     if (element.dataset.range) { const n = Number(element.value); setFilters(old => ({ ...old, [element.dataset.range!]: n })); }
     if (element.dataset.license && detailId) setLicenseChoice(old => ({ ...old, [detailId]: element.value }));
     if (element.dataset.sell) { const key = element.dataset.sell; setSell(old => ({ ...old, [key]: key === 'decl' ? (old.decl as boolean[]).map((checked, i) => i === Number(element.dataset.idx) ? element.checked : checked) : element.value })); }
+    if (element.dataset.complaint) { const key = element.dataset.complaint as 'entitlementId' | 'reason' | 'description'; setComplaintDraft(old => ({ ...old, [key]: element.value })); }
     if (element.hasAttribute('data-admin-reason')) setAdminReason(element.value);
   }
   function submit(event: FormEvent<HTMLDivElement>) {
     event.preventDefault(); const form = event.target as HTMLFormElement;
     if (form.dataset.action === 'submit-search') { const query = String(new FormData(form).get('q') ?? form.querySelector('input')?.value ?? ''); setFilters(old => ({ ...old, q: query })); go('/'); }
   }
-  return <div ref={root} onClick={click} onChange={change} onSubmit={submit} data-fixture-mode={fixtureMode ? 'NON_PRODUCTION' : undefined}><div style={{ display: 'contents' }} dangerouslySetInnerHTML={{ __html: headerHTML }}/><main id="main" className="site-main" tabIndex={-1} dangerouslySetInnerHTML={{ __html: html }}/><div style={{ display: 'contents' }} dangerouslySetInnerHTML={{ __html: footerHTML }}/>{fixtureMode && <small className="fixture-mode" title={t('ui.fixtureBanner')}>NON_PRODUCTION</small>}<div className="toast-host" aria-live="polite">{toast && <div className="toast">{toast}</div>}</div><dialog ref={infoDialog} className="dlg"><div className="dlg-body"><div className="dlg-head"><h2>{t('footer.refundPolicy')}</h2><button className="btn btn-ghost" onClick={() => infoDialog.current?.close()}>{t('common.close')}</button></div><div className="dlg-body-inner" dangerouslySetInnerHTML={{ __html: dialogContent }}/></div></dialog>{authOpen && <AuthDialog close={() => setAuthOpen(false)} complete={setUser}/>}</div>;
+  return <div ref={root} onClick={click} onChange={change} onSubmit={submit} data-fixture-mode={fixtureMode ? 'NON_PRODUCTION' : undefined}><div style={{ display: 'contents' }} dangerouslySetInnerHTML={{ __html: headerHTML }}/><main id="main" className="site-main" tabIndex={-1} dangerouslySetInnerHTML={{ __html: html }}/><div style={{ display: 'contents' }} dangerouslySetInnerHTML={{ __html: footerHTML }}/>{fixtureMode && <small className="fixture-mode" title={t('ui.fixtureBanner')}>NON_PRODUCTION</small>}<div className="toast-host" aria-live="polite">{toast && <div className="toast">{toast}</div>}</div><dialog ref={infoDialog} className="dlg"><div className="dlg-body"><div className="dlg-head"><h2>{dialogTitle || t('footer.refundPolicy')}</h2><button className="btn btn-ghost" onClick={() => infoDialog.current?.close()}>{t('common.close')}</button></div><div className="dlg-body-inner" dangerouslySetInnerHTML={{ __html: dialogContent }}/></div></dialog>{authOpen && <AuthDialog close={() => setAuthOpen(false)} complete={setUser}/>}</div>;
 }
 export function App() { return <BrowserRouter><FinalDesign/></BrowserRouter>; }

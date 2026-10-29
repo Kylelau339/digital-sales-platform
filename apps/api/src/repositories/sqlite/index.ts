@@ -195,13 +195,13 @@ class SqliteOrderRepository implements P.OrderRepository {
       const repo = new SqliteOrderRepository(db);
       const existing = await db.selectFrom('orders').selectAll().where('idempotency_key', '=', o.idempotencyKey).executeTakeFirst();
       if (existing) {
-        const same = existing.buyer_id === o.buyerId && existing.seller_id === o.sellerId && existing.template_id === o.templateId && existing.version_id === o.versionId && existing.license_type === o.licenseType && existing.license_price_factor === o.licensePriceFactor && existing.price_cents === o.priceCents && existing.payment_currency === o.paymentCurrency && existing.payment_amount_minor === o.paymentAmountMinor && existing.quote_rate_json === (o.quoteRate ? encode(o.quoteRate) : null) && existing.quote_expires_at === o.quoteExpiresAt && existing.quote_id === o.quoteId && existing.platform_fee_cents === o.platformFeeCents && existing.seller_amount_cents === o.sellerAmountCents && existing.tax_snapshot_json === encode(o.taxSnapshot);
+        const same = existing.buyer_id === o.buyerId && existing.seller_id === o.sellerId && existing.template_id === o.templateId && existing.version_id === o.versionId && existing.license_type === o.licenseType && existing.license_price_factor === o.licensePriceFactor && existing.price_cents === o.priceCents && existing.payment_currency === o.paymentCurrency && existing.payment_amount_minor === o.paymentAmountMinor && existing.quote_rate_json === (o.quoteRate ? encode(o.quoteRate) : null) && existing.quote_expires_at === o.quoteExpiresAt && existing.quote_id === o.quoteId && existing.platform_fee_bps === (o.platformFeeBps ?? 0) && existing.platform_fee_cents === o.platformFeeCents && existing.seller_amount_cents === o.sellerAmountCents && existing.tax_snapshot_json === encode(o.taxSnapshot);
         if (!same) throw new DomainError(ERROR_CODES.IDEMPOTENCY_CONFLICT, 409, 'Idempotency key belongs to a different order request.');
         return required(await repo.findById(existing.id), 'Order not found.');
       }
       const policy = await new SqliteRefundPolicyRepository(db).getCurrent();
       const snapshot = S.validate(S.snapshotSchema, { windowDays: policy.windowDays, eligible: policy.eligible, exclusions: policy.exclusions, windowExemptReasons: policy.windowExemptReasons, manualReviewRequired: policy.manualReviewRequired });
-      await db.insertInto('orders').values({ id: o.id, order_no: o.orderNo, buyer_id: o.buyerId, seller_id: o.sellerId, template_id: o.templateId, version_id: o.versionId, license_type: o.licenseType, license_price_factor: o.licensePriceFactor, price_cents: o.priceCents, pricing_currency: 'USD', payment_currency: o.paymentCurrency, payment_amount_minor: o.paymentAmountMinor, quote_rate_json: o.quoteRate ? encode(o.quoteRate) : null, quote_expires_at: o.quoteExpiresAt, quote_id: o.quoteId, refund_policy_version: policy.version, refund_policy_snapshot_json: encode(snapshot), platform_fee_cents: o.platformFeeCents, seller_amount_cents: o.sellerAmountCents, tax_snapshot_json: encode(o.taxSnapshot), payment_status: 'pending', order_status: 'pending_payment', paid_at: null, idempotency_key: o.idempotencyKey, created_at: o.now, updated_at: o.now }).execute();
+      await db.insertInto('orders').values({ id: o.id, order_no: o.orderNo, buyer_id: o.buyerId, seller_id: o.sellerId, template_id: o.templateId, version_id: o.versionId, license_type: o.licenseType, license_price_factor: o.licensePriceFactor, price_cents: o.priceCents, pricing_currency: 'USD', payment_currency: o.paymentCurrency, payment_amount_minor: o.paymentAmountMinor, quote_rate_json: o.quoteRate ? encode(o.quoteRate) : null, quote_expires_at: o.quoteExpiresAt, quote_id: o.quoteId, refund_policy_version: policy.version, refund_policy_snapshot_json: encode(snapshot), platform_fee_bps: o.platformFeeBps ?? 0, platform_fee_cents: o.platformFeeCents, seller_amount_cents: o.sellerAmountCents, tax_snapshot_json: encode(o.taxSnapshot), payment_status: 'pending', order_status: 'pending_payment', paid_at: null, idempotency_key: o.idempotencyKey, created_at: o.now, updated_at: o.now }).execute();
       await db.insertInto('order_items').values({ order_id: o.id, template_id: o.templateId, version_id: o.versionId, license_type: o.licenseType, price_cents: o.priceCents }).execute();
       return required(await repo.findById(o.id), 'Order not found.');
     });
@@ -229,7 +229,7 @@ class SqliteComplaintRepository implements P.ComplaintRepository {
   async create(input: P.CreateComplaintInput): Promise<Complaint> {
     const c = S.validate(S.createComplaintSchema, input);
     return atomic(this.db, async db => {
-      await db.insertInto('complaints').values({ id: c.id, order_id: c.orderId, entitlement_id: c.entitlementId, template_id: c.templateId, version_id: c.versionId, reason: c.reason, description: c.description, status: 'submitted', review_route: c.reviewRoute, refund_decision: 'not_requested', refund_amount_usd_cents: null, created_at: c.now, updated_at: c.now }).execute();
+      await db.insertInto('complaints').values({ id: c.id, order_id: c.orderId, entitlement_id: c.entitlementId, template_id: c.templateId, version_id: c.versionId, reason: c.reason, description: c.description, status: 'submitted', review_route: c.reviewRoute, refund_decision: 'not_requested', refund_amount_usd_cents: null, idempotency_key: c.idempotencyKey ?? null, created_at: c.now, updated_at: c.now }).execute();
       await db.insertInto('complaint_timeline').values({ id: `${c.id}:submitted`, complaint_id: c.id, event: 'submitted', actor_id: c.actorId, note: null, at: c.now }).execute();
       return required(await new SqliteComplaintRepository(db).findById(c.id), 'Complaint not found.');
     });
@@ -239,6 +239,14 @@ class SqliteComplaintRepository implements P.ComplaintRepository {
     if (!row) return null;
     const timeline = await this.db.selectFrom('complaint_timeline').selectAll().where('complaint_id', '=', id).orderBy('at').orderBy('id').execute();
     return M.mapComplaint(row, timeline);
+  }
+  async listByBuyer(buyerId: string, input: P.PageInput): Promise<P.Page<Complaint>> {
+    const p = page(input);
+    const rows = await this.db.selectFrom('complaints').innerJoin('orders', 'orders.id', 'complaints.order_id').selectAll('complaints').where('orders.buyer_id', '=', buyerId).orderBy('complaints.created_at', 'desc').orderBy('complaints.id').limit(p.limit).offset(p.offset).execute();
+    const ids = rows.map(row => row.id);
+    const timeline = ids.length ? await this.db.selectFrom('complaint_timeline').selectAll().where('complaint_id', 'in', ids).orderBy('at').orderBy('id').execute() : [];
+    const count = await this.db.selectFrom('complaints').innerJoin('orders', 'orders.id', 'complaints.order_id').select(({ fn }) => fn.countAll<number>().as('count')).where('orders.buyer_id', '=', buyerId).executeTakeFirstOrThrow();
+    return { items: rows.map(row => M.mapComplaint(row, timeline.filter(event => event.complaint_id === row.id))), total: Number(count.count) };
   }
 }
 
