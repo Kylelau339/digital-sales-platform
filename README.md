@@ -1,5 +1,7 @@
 # Digital Sales Platform
 
+**Languages:** [English](README.md) · [繁體中文](README.zh-TW.md) · [日本語](README.ja.md) · [한국어](README.ko.md)
+
 An open-source marketplace platform for selling any digital product: design templates, motion and animation packs, presets, LUTs, plugins, 3D assets, fonts, audio, e-books, courses, and software licenses.
 
 Built with React, Fastify, SQLite, and TypeScript. The bundled `.motion` animation template is a working reference demo, not a limitation — the same publishing, review, payment, entitlement, and private-download pipeline applies to any downloadable digital good.
