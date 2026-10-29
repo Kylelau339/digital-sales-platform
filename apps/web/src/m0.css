@@ -1,0 +1,1 @@
+.fixture-mode { position: fixed; bottom: 6px; right: 10px; z-index: 50; padding: 2px 5px; color: var(--ink-3); background: var(--bg-base); font: 9px var(--font-mono); opacity: .75; pointer-events: none; }

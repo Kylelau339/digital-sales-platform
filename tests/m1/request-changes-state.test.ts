@@ -1,0 +1,10 @@
+import { describe, expect, it } from 'vitest';
+import { requestChangesState } from '../../apps/api/src/application/templates/request-changes-state.js';
+import type { TemplateProduct, TemplateVersion } from '@shared/contracts/domain.js';
+const product = (status: TemplateProduct['status'], currentVersionId: string | null): TemplateProduct => ({ id:'tpl', sellerId:'seller', name:{zh:'x',en:'x'}, summary:{zh:'x',en:'x'}, category:'intro', licenseTypes:['commercial_single_project'], licensePricing:[{licenseType:'commercial_single_project',factor:'1',priceUsdCents:100}], priceUsdCents:100, status, publishedAt:null, currentVersionId, reviewTargetVersionId:'v2', version:'1.0.0', rating:0, salesRecent:0, updated:'2026-10-01T00:00:00.000Z',createdAt:'2026-10-01T00:00:00.000Z' });
+const version = (id: string, status: NonNullable<TemplateVersion['status']>): TemplateVersion => ({versionId:id,templateId:'tpl',version:id,status,revision:1,files:[],packageLicense:{parserStatus:'unknown',file:null,detected:null,excerpt:null},licenseText:null,scanJobId:'scan',scanStatus:'passed',conflictFlag:false,conflictReasons:[],immutable:false,createdAt:'2026-10-01T00:00:00.000Z',submittedAt:null,approvedAt:null});
+describe('M1 request changes state',()=>{
+ it('first listing returns draft and null current',()=>expect(requestChangesState(product('pending_license_review',null),version('v1','pending_license_review'),'v2')).toMatchObject({oldVersionStatus:'rejected',templateStatus:'draft',currentVersionId:null,currentVersionStatus:null}));
+ it('sold v1 stays approved while v2 is revised',()=>expect(requestChangesState(product('approved','v1'),version('v2','pending_license_review'),'v3')).toMatchObject({oldVersionStatus:'rejected',templateStatus:'approved',currentVersionId:'v1',currentVersionStatus:'approved'}));
+ it('revising current approved version keeps it approved',()=>expect(requestChangesState(product('approved','v1'),version('v1','approved'),'v2')).toMatchObject({oldVersionStatus:'approved',templateStatus:'approved',currentVersionId:'v1',currentVersionStatus:'approved'}));
+});

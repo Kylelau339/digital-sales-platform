@@ -1,0 +1,10 @@
+import type { TemplateStatus } from '../../../../../packages/shared/src/enums/domain';
+export type LocalText = { en?: string; zh?: string; 'zh-TW'?: string; ja?: string; ko?: string };
+export interface TemplateItem { id: string; name: LocalText; summary?: LocalText; category: string; priceUsdCents: number; status: TemplateStatus; version: string; rating: number; salesRecent: number; licenseTypes: string[]; seller?: { name: string; verified: boolean }; specs?: { duration: string; resolution: string; files: number; fonts: number }; packageLicense?: { parserStatus: string; file: string | null; detected: string | null; excerpt: string | null }; licenseText?: string; }
+export interface LibraryItem { id: string; templateId: string; versionId: string; orderId: string; licenseType: string; maxDownloads: number; downloadCount: number; expiresAt: string; status: string; reissuedFromId?: string | null; reissuedToId?: string | null; }
+export interface ComplaintItem { id: string; orderId: string; templateId: string; reason: string; status: string; refundDecision: string; submittedAt: string; updatedAt: string; }
+export interface SubmissionItem { id: string; title: LocalText; seller: string; submittedAt: string; parserStatus: string; scanStatus: string; scanJobId: string; conflictFlag: boolean; conflictReasons: string[]; urlAuthorityStatus: string; pageSummary: LocalText | null; packageLicense: { file: string | null; excerpt: string | null }; }
+export interface AuditItem { id: string; at: string; actor: string; targetId: string; diff: { field: string; before: string; after: string }[]; }
+export interface Workspace { entitlements: LibraryItem[]; complaints: ComplaintItem[]; submissions: SubmissionItem[]; audit: AuditItem[]; scan: { jobId: string; parserStatus: string; file: string; excerpt: string; manifest: string[][] } | null; }
+export interface CatalogClient { listTemplates(signal?: AbortSignal): Promise<{ items: TemplateItem[]; total: number }>; workspace(): Promise<Workspace>; }
+export const emptyWorkspace = (): Workspace => ({ entitlements: [], complaints: [], submissions: [], audit: [], scan: null });

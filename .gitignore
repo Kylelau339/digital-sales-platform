@@ -1,0 +1,119 @@
+# Dependencies
+node_modules/
+
+# Build and tooling output
+dist/
+.vite/
+coverage/
+.turbo/
+.cache/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Local databases and SQLite sidecar files
+*.sqlite
+*.sqlite3
+*.db
+*.db-shm
+*.db-wal
+
+# Local private storage and uploaded assets
+/var/
+/runtime/
+/data/
+/private/
+/storage/
+/quarantine/
+/uploads/
+/templates/
+/proofs/
+/previews/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+*.part
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Test artifacts
+.test-results/
+playwright-report/
+test-results/
+
+# Operating system files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor and agent metadata
+.vscode/
+.idea/
+*.swp
+*.swo
+.zcode/
+.agents/
+.adal/
+.aider-desk/
+.augment/
+.autohand/
+.bob/
+.claude/
+.codeartsdoer/
+.codebuddy/
+.codemaker/
+.codestudio/
+.commandcode/
+.continue/
+.cortex/
+.crush/
+.devin/
+.forge/
+.goose/
+.grok/
+.hermes/
+.iflow/
+.inferencesh/
+.jazz/
+.junie/
+.kimchi/
+.kiro/
+.kode/
+.lingma/
+.mcpjam/
+.minimax/
+.moxby/
+.mux/
+.neovate/
+.ona/
+.openhands/
+.pochi/
+.posit/
+.qoder/
+.qwen/
+.reasonix/
+.roo/
+.rovodev/
+.tabnine/
+.terramind/
+.tinycloud/
+.trae/
+.vibe/
+.windsurf/
+.zencoder/
+
+# Local skill/tool caches
+/agent/
+/.agents/
+/data/skills/
+/skills/

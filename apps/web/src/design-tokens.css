@@ -1,0 +1,173 @@
+/* Original prototype tokens: base scale plus final marketplace restyle. */
+:root {
+  color-scheme: dark;
+
+  /* colour */
+  --bg-base: #101215;
+  --bg-surface: #171B21;
+  --bg-subtle: #22272F;
+  --ink: #F2F1EC;
+  --ink-2: #C4C8CF;
+  --ink-3: #8A919B;
+  --ink-inverse: #101215;
+  --border: #2C3138;
+  --border-strong: #5D656F;
+  --rule: #6F7883;
+  --accent: #C6F24E;
+  --accent-hover: #D6FA70;
+  --accent-soft: #26301A;
+  --success: #5BD68A;
+  --success-soft: #12261A;
+  --warning: #E8B04B;
+  --warning-soft: #2B2113;
+  --danger: #F27A6B;
+  --danger-soft: #2E1714;
+
+  /* type */
+  --font-display: "Syne", "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+  --font-body: "IBM Plex Sans", "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, -apple-system, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+  --fs-xs: 0.75rem;
+  --fs-sm: 0.8125rem;
+  --fs-base: 1rem;
+  --fs-md: 1.125rem;
+  --fs-lg: 1.375rem;
+  --fs-xl: 1.75rem;
+  --fs-2xl: 2.25rem;
+  --fs-3xl: 3.125rem;
+  --lh-tight: 1.14;
+  --lh-body: 1.65;
+
+  /* spacing — multiples of 4/8 */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 24px;
+  --s6: 32px;
+  --s7: 48px;
+  --s8: 64px;
+  --s9: 96px;
+
+  /* radius & shadow — near-square, rules instead of shadows */
+  --r-sm: 2px;
+  --r-md: 2px;
+  --r-lg: 3px;
+  --r-pill: 2px;
+  --shadow-1: 0 1px 0 rgba(0, 0, 0, 0.45);
+  --shadow-2: 0 12px 32px rgba(0, 0, 0, 0.55);
+
+  /* motion */
+  --dur-1: 150ms;
+  --dur-2: 220ms;
+  --dur-3: 320ms;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.3, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+
+  --shell: 1240px;
+}
+:root,
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --bg-base: #F2EFE4;
+  --bg-surface: #FBF9F1;
+  --bg-elevated: #FFFFFF;
+  --bg-subtle: #E7E2D3;
+  --ink: #15161A;
+  --ink-2: #3D3F45;
+  --ink-3: #71736C;
+  --ink-inverse: #FBFAF4;
+  --border: #D7D1C1;
+  --border-strong: #15161A;
+  --rule: #15161A;
+
+  --accent: #CBF25C;
+  --accent-hover: #DBFF7C;
+  --accent-ink: #3D5200;
+  --accent-contrast: #15161A;
+  --accent-soft: #EEFAC4;
+  --blue: #A9D6F5;
+  --blue-strong: #6AB2E9;
+  --blue-soft: #E1F2FD;
+  --orange: #FF6A33;
+  --orange-soft: #FFE3D7;
+  --beige: #E7E0CE;
+
+  --success: #1F6B3C;
+  --success-soft: #E1F2E4;
+  --warning: #855400;
+  --warning-soft: #FBEFD5;
+  --danger: #B22D21;
+  --danger-soft: #FBE4DF;
+
+  --font-display: "Space Grotesk", "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+  --font-body: "IBM Plex Sans", "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, -apple-system, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+
+  --fs-xs: 0.8125rem;
+  --fs-sm: 0.875rem;
+  --fs-base: 1rem;
+  --fs-md: 1.125rem;
+  --fs-lg: 1.375rem;
+  --fs-xl: 1.75rem;
+  --fs-2xl: 2.25rem;
+  --fs-3xl: 3.25rem;
+
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 20px;
+  --r-xl: 26px;
+  --r-pill: 999px;
+
+  --shadow-1: 0 1px 0 rgba(21, 22, 26, 0.05);
+  --shadow-2: 0 28px 60px -34px rgba(21, 22, 26, 0.38);
+  --offset-color: #15161A;
+  --offset: 5px 5px 0 var(--offset-color);
+  --offset-sm: 3px 3px 0 var(--offset-color);
+  --scrim: rgba(21, 22, 26, 0.46);
+  --ink-hover: #000000;
+  --sk-highlight: rgba(255, 255, 255, 0.9);
+  --shell: 1320px;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg-base: #121316;
+  --bg-surface: #1A1C20;
+  --bg-elevated: #23262B;
+  --bg-subtle: #2A2D32;
+  --ink: #F4F1E6;
+  --ink-2: #CFCCC1;
+  --ink-3: #96958C;
+  --ink-inverse: #121316;
+  --border: #3B3E45;
+  --border-strong: #F4F1E6;
+  --rule: #F4F1E6;
+
+  --accent: #CBF25C;
+  --accent-hover: #DBFF7C;
+  --accent-ink: #DDFF8C;
+  --accent-contrast: #15161A;
+  --accent-soft: #303A18;
+  --blue: #2F4A5E;
+  --blue-strong: #7CC4F2;
+  --blue-soft: #1C2B35;
+  --orange: #FF7B45;
+  --orange-soft: #3A2015;
+  --beige: #2C2A24;
+
+  --success: #7CD79B;
+  --success-soft: #17291D;
+  --warning: #F0BB65;
+  --warning-soft: #2D2415;
+  --danger: #FF8C7C;
+  --danger-soft: #341A17;
+
+  --offset-color: #050505;
+  --ink-hover: #FFFFFF;
+  --sk-highlight: rgba(255, 255, 255, 0.08);
+  --scrim: rgba(0, 0, 0, 0.66);
+}
+
