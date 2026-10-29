@@ -1,18 +1,31 @@
-# .motion Template Market
+# Digital Sales Platform
 
-An open-source `.motion` template marketplace built with React, Fastify, SQLite, and TypeScript.
+An open-source marketplace platform for selling any digital product: design templates, motion and animation packs, presets, LUTs, plugins, 3D assets, fonts, audio, e-books, courses, and software licenses.
 
-The project provides a secure template publishing, review, payment, entitlement, and private-download foundation for `.motion` packages.
+Built with React, Fastify, SQLite, and TypeScript. The bundled `.motion` animation template is a working reference demo, not a limitation — the same publishing, review, payment, entitlement, and private-download pipeline applies to any downloadable digital good.
 
 ![Marketplace](docs/images/market.png)
 ![Seller Dashboard](docs/images/seller.png)
 ![Admin Review](docs/images/admin.png)
 
+## What you can sell
+
+The listing, licensing, moderation, checkout, entitlement, and download layers are product-agnostic. You can use this template for:
+
+- Motion graphics, animation presets, and video templates
+- Design systems, UI kits, and presentation templates
+- Plugins, scripts, and developer tools
+- 3D models, textures, and game assets
+- Fonts, sound effects, music packs, and stock media
+- E-books, courses, and other downloadable knowledge products
+
+Each product is published as a versioned package with its own license terms, preview assets, moderation record, and private delivery artifact.
+
 ## Features
 
-### Template publishing and review
+### Product publishing and review
 
-- Seller upload workflow for `.motion` and ZIP packages.
+- Seller upload workflow for any packaged digital product, including `.motion` and ZIP packages.
 - ZIP central-directory safety checks.
 - Path traversal, absolute path, alias, duplicate entry, symlink, special-file, executable, and script detection.
 - Worker-based scanning with size and timeout limits.
@@ -64,6 +77,23 @@ The project provides a secure template publishing, review, payment, entitlement,
 - Private storage keys are never exposed to clients.
 - Delivery artifact size and SHA-256 verification.
 - Download responses return the sanitized ZIP only.
+
+## Interface languages
+
+The web interface ships with four locales:
+
+| Code | Language |
+| --- | --- |
+| `zh-TW` | 繁體中文 |
+| `en` | English |
+| `ja` | 日本語 |
+| `ko` | 한국어 |
+
+To add another language, extend `apps/web/src/lib/i18n/strings.ts` and register the locale code in `apps/web/src/lib/i18n/i18n.ts`. Seller-provided product content and license terms are shown as entered and are not machine-translated.
+
+## Tech stack
+
+TypeScript · React · Vite · Fastify · SQLite (WAL) · Kysely · Stripe Checkout and Connect · Node.js 24
 
 ## Project status
 
