@@ -8,7 +8,7 @@ function baseOrder(): Order {
   return {
     id: 'ord_1', orderNo: 'M0-1', buyerId: 'buyer_1', sellerId: 'seller_1', templateId: 'tpl_1', versionId: 'ver_1',
     licenseType: 'commercial_single_project', licensePriceFactor: '1', priceCents: 1000, pricingCurrency: 'USD', paymentCurrency: 'USD', paymentAmountMinor: 1000,
-    quoteRate: null, quoteExpiresAt: null, quoteId: null, platformFeeCents: 100, sellerAmountCents: 900, taxSnapshot: {}, refundPolicyVersion: 'v2.1', refundPolicySnapshot: {
+    quoteRate: null, quoteExpiresAt: null, quoteId: null, platformFeeBps: 0, platformFeeCents: 100, sellerAmountCents: 900, taxSnapshot: {}, refundPolicyVersion: 'v2.1', refundPolicySnapshot: {
       windowDays: 7, eligible: ['file_corrupted_or_inaccessible', 'materially_not_as_described', 'duplicate_purchase'],
       exclusions: ['already_downloaded', 'subjective_dissatisfaction'], windowExemptReasons: ['technical_unavailable', 'file_corrupted_or_inaccessible'], manualReviewRequired: true
     }, items: [{ templateId: 'tpl_1', versionId: 'ver_1', licenseType: 'commercial_single_project', priceCents: 1000 }],

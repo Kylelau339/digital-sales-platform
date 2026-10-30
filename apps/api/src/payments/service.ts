@@ -26,7 +26,7 @@ export function createStripeCheckoutClient(secretKey: string | undefined): Check
   };
 }
 
-export function createPaymentService(db: Kysely<Database>, privateRoot: string, client: CheckoutClient, webhookSecret: string | undefined) {
+export function createPaymentService(db: Kysely<Database>, privateRoot: string, client: CheckoutClient, webhookSecret: string | undefined, platformFeeBps = 0) {
   const repos = createSqliteRepositories(db); const storage = new LocalPrivateStorage(privateRoot);
   async function assertPurchasable(templateId: string, licenseType: string) {
     const product = await repos.products.findById(templateId);
@@ -45,7 +45,9 @@ export function createPaymentService(db: Kysely<Database>, privateRoot: string, 
     async createCheckout(buyerId: string, templateId: string, licenseType: string, requestKey: string) {
       const { product, version, pricing } = await assertPurchasable(templateId, licenseType);
       const priceCents = pricing.priceUsdCents;
-      const order = await repos.orders.createSingleItemPendingPayment({ id: id('order'), orderNo: id('orderno'), buyerId, sellerId: product.sellerId, templateId, versionId: version.versionId, licenseType: licenseType as Order['licenseType'], licensePriceFactor: pricing.factor, priceCents, paymentCurrency: 'USD', paymentAmountMinor: priceCents, quoteRate: null, quoteExpiresAt: null, platformFeeCents: 0, sellerAmountCents: priceCents, taxSnapshot: { automaticTax: false, status: 'not_enabled' }, idempotencyKey: requestKey, now: nowUtc() });
+      const platformFeeCents = Math.floor(priceCents * platformFeeBps / 10000);
+      const sellerAmountCents = priceCents - platformFeeCents;
+      const order = await repos.orders.createSingleItemPendingPayment({ id: id('order'), orderNo: id('orderno'), buyerId, sellerId: product.sellerId, templateId, versionId: version.versionId, licenseType: licenseType as Order['licenseType'], licensePriceFactor: pricing.factor, priceCents, paymentCurrency: 'USD', paymentAmountMinor: priceCents, quoteRate: null, quoteExpiresAt: null, platformFeeBps, platformFeeCents, sellerAmountCents, taxSnapshot: { automaticTax: false, status: 'not_enabled' }, idempotencyKey: requestKey, now: nowUtc() });
       const session = await client.create({ orderId: order.id, templateId, versionId: version.versionId, amountCents: priceCents, licenseType, idempotencyKey: `checkout:${order.id}` });
       await db.updateTable('orders').set({ stripe_checkout_session_id: session.id, checkout_session_expires_at: session.expiresAt, updated_at: nowUtc() }).where('id', '=', order.id).where('payment_status', '=', 'pending').execute();
       return { orderId: order.id, checkoutSessionId: session.id, url: session.url };

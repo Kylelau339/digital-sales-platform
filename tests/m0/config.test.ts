@@ -13,6 +13,6 @@ describe('M0 startup configuration', () => {
   it('rejects production fixture mode and default secrets', () => {
     expect(() => loadEnv({ NODE_ENV: 'production', USE_FIXTURES: 'true' })).toThrow();
     expect(() => loadEnv({ NODE_ENV: 'production', ALLOWED_ORIGIN: 'https://motion.example' })).toThrow();
-    expect(loadEnv({ NODE_ENV: 'production', ALLOWED_ORIGIN: 'https://motion.example', SESSION_SECRET: 's'.repeat(48), CSRF_SECRET: 'c'.repeat(48) }).USE_FIXTURES).toBe(false);
+    expect(loadEnv({ NODE_ENV: 'production', ALLOWED_ORIGIN: 'https://motion.example', SESSION_SECRET: 's'.repeat(48), CSRF_SECRET: 'c'.repeat(48), EMAIL_PROVIDER: 'smtp', SMTP_HOST: 'smtp.example', SMTP_USER: 'user', SMTP_PASS: 'pass' }).USE_FIXTURES).toBe(false);
   });
 });

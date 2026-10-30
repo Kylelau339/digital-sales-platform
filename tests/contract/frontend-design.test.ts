@@ -19,12 +19,14 @@ describe('frontend design and fixture contracts', () => {
   });
   it('renders all six final-design views in every locale from generated mock data', () => {
     const data = mockData();
-    for (const locale of locales) for (const route of ['market', 'detail', 'seller', 'library', 'complaints', 'admin']) {
-      const html = createPresentation(data, dictionaries).render({ route, lang: locale, signedIn: true, loading: false, detailId: 'mock-template' });
+    for (const locale of locales) for (const route of ['market', 'detail', 'seller', 'library', 'complaints', 'admin', 'earnings']) {
+      const html = createPresentation(data, dictionaries).render({ route, lang: locale, signedIn: true, loading: false, detailId: 'mock-template', earnings: data.earnings, admin: { tab: 'records', complaints: data.adminComplaints, templates: data.adminTemplates }, isAdmin: true, isSeller: true });
       expect(html.length).toBeGreaterThan(200);
       expect(html).not.toContain('undefined');
       if (route === 'library') expect(html).toContain('class="lib-item"');
       if (route === 'market') expect(html).toContain('sort-control');
+      if (route === 'earnings') expect(html).toContain('metric-strip');
+      if (route === 'admin') expect(html).toContain('adm-records-grid');
     }
   });
   it('provides all six new complaint reason keys and the manual-window exemption in four languages', () => {

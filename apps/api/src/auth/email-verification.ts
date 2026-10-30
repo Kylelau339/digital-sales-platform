@@ -5,10 +5,20 @@ import { id } from '@shared/time.js';
 import type { Database } from '../db/types.js';
 import { hashToken, matchesToken } from '../config/tokens.js';
 
-export interface VerificationSender { send(input: { email: string; code: string; expiresAt: string }): Promise<void>; }
+export interface VerificationSender {
+  readonly provider?: string;
+  send(input: { email: string; code: string; expiresAt: string }): Promise<{ messageId: string | null } | void>;
+}
 export class MemoryVerificationSender implements VerificationSender {
+  readonly provider = 'memory';
   readonly messages: Array<{ email: string; code: string; expiresAt: string }> = [];
   async send(input: { email: string; code: string; expiresAt: string }): Promise<void> { this.messages.push(input); }
+}
+
+async function logDelivery(db: Kysely<Database>, input: { userId: string; recipient: string; provider: string; status: 'sent' | 'failed'; messageId: string | null; errorCode: string | null; at: string }): Promise<void> {
+  try {
+    await db.insertInto('email_delivery_logs').values({ id: id('emaildelivery'), user_id: input.userId, recipient: input.recipient, kind: 'email_verification', provider: input.provider, status: input.status, provider_message_id: input.messageId, error_code: input.errorCode, created_at: input.at }).execute();
+  } catch { /* Delivery logging must not mask the email result. */ }
 }
 
 export function createEmailVerification(db: Kysely<Database>, secret: string, sender: VerificationSender | undefined, clock: () => Date = () => new Date()) {
@@ -27,8 +37,14 @@ export function createEmailVerification(db: Kysely<Database>, secret: string, se
         await trx.insertInto('email_verification_codes').values({ id: codeId, user_id: userId, code_hash: hashToken(`${userId}:${code}`, secret), created_at: at, expires_at: expiresAt, consumed_at: null, attempts: 0 }).execute();
         return user.email;
       });
-      try { await sender.send({ email, code, expiresAt }); }
-      catch { await db.updateTable('email_verification_codes').set({ consumed_at: at }).where('id', '=', codeId).where('consumed_at', 'is', null).execute(); throw new DomainError(ERROR_CODES.INTERNAL_ERROR, 500, 'Email delivery failed.'); }
+      try {
+        const result = await sender.send({ email, code, expiresAt });
+        await logDelivery(db, { userId, recipient: email, provider: sender.provider ?? 'unknown', status: 'sent', messageId: result?.messageId ?? null, errorCode: null, at });
+      } catch (error) {
+        await logDelivery(db, { userId, recipient: email, provider: sender.provider ?? 'unknown', status: 'failed', messageId: null, errorCode: error instanceof Error ? error.name : 'UNKNOWN', at });
+        await db.updateTable('email_verification_codes').set({ consumed_at: at }).where('id', '=', codeId).where('consumed_at', 'is', null).execute();
+        throw new DomainError(ERROR_CODES.INTERNAL_ERROR, 500, 'Email delivery failed.');
+      }
     },
     async verify(userId: string, code: string): Promise<void> {
       const at = clock().toISOString();

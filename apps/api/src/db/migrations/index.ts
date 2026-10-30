@@ -445,6 +445,77 @@ const migrations: Migration[] = [
       await sql`ALTER TABLE template_files ADD COLUMN artifact_status TEXT NOT NULL DEFAULT 'unverified'`.execute(db);
       await sql`CREATE INDEX IF NOT EXISTS idx_template_files_artifact ON template_files(version_id, kind, artifact_status)`.execute(db);
     }
+  },
+  {
+    name: '0015_m3_email_delivery_logs',
+    async up(db) {
+      await db.schema.createTable('email_delivery_logs').ifNotExists()
+        .addColumn('id', 'text', col => col.primaryKey())
+        .addColumn('user_id', 'text', col => col.notNull().references('users.id').onDelete('cascade'))
+        .addColumn('recipient', 'text', col => col.notNull())
+        .addColumn('kind', 'text', col => col.notNull())
+        .addColumn('provider', 'text', col => col.notNull())
+        .addColumn('status', 'text', col => col.notNull())
+        .addColumn('provider_message_id', 'text')
+        .addColumn('error_code', 'text')
+        .addColumn('created_at', 'text', col => col.notNull())
+        .execute();
+      await db.schema.createIndex('idx_email_delivery_logs_user').ifNotExists().on('email_delivery_logs').columns(['user_id', 'created_at']).execute();
+      await sql`CREATE INDEX IF NOT EXISTS idx_email_delivery_logs_created ON email_delivery_logs(created_at DESC)`.execute(db);
+    }
+  },
+  {
+    name: '0016_m3_complaints_refunds',
+    async up(db) {
+      await sql`ALTER TABLE complaints ADD COLUMN idempotency_key TEXT`.execute(db);
+      await sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_complaints_idempotency ON complaints(idempotency_key) WHERE idempotency_key IS NOT NULL`.execute(db);
+      await sql`CREATE TABLE IF NOT EXISTS refund_requests (
+        id TEXT PRIMARY KEY,
+        complaint_id TEXT NOT NULL REFERENCES complaints(id),
+        order_id TEXT NOT NULL REFERENCES orders(id),
+        requested_by TEXT NOT NULL REFERENCES users(id),
+        amount_minor INTEGER NOT NULL CHECK (amount_minor > 0),
+        currency TEXT NOT NULL CHECK (currency IN ('USD','USDT')),
+        status TEXT NOT NULL CHECK (status IN ('pending','succeeded','failed','rejected')),
+        stripe_refund_id TEXT,
+        stripe_payment_intent TEXT NOT NULL,
+        idempotency_key TEXT NOT NULL UNIQUE,
+        failure_reason TEXT,
+        product_refund_cents INTEGER NOT NULL CHECK (product_refund_cents >= 0),
+        tax_refund_cents INTEGER NOT NULL CHECK (tax_refund_cents >= 0),
+        platform_fee_reversal_cents INTEGER NOT NULL CHECK (platform_fee_reversal_cents >= 0),
+        seller_reversal_cents INTEGER NOT NULL CHECK (seller_reversal_cents >= 0),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        CHECK (product_refund_cents = platform_fee_reversal_cents + seller_reversal_cents)
+      )`.execute(db);
+      await sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_refund_requests_active ON refund_requests(complaint_id) WHERE status IN ('pending','succeeded')`.execute(db);
+      await sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_refund_requests_stripe ON refund_requests(stripe_refund_id) WHERE stripe_refund_id IS NOT NULL`.execute(db);
+      await sql`CREATE INDEX IF NOT EXISTS idx_refund_requests_status ON refund_requests(status, created_at)`.execute(db);
+      await sql`ALTER TABLE transactions ADD COLUMN refund_request_id TEXT REFERENCES refund_requests(id)`.execute(db);
+      await sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_refund_request ON transactions(refund_request_id) WHERE refund_request_id IS NOT NULL`.execute(db);
+      await sql`CREATE INDEX IF NOT EXISTS idx_transactions_order_type_status ON transactions(order_id, type, status)`.execute(db);
+      await sql`CREATE INDEX IF NOT EXISTS idx_complaints_status_created ON complaints(status, created_at)`.execute(db);
+    }
+  },
+  {
+    name: '0017_m3_takedown_and_fees',
+    async up(db) {
+      await sql`CREATE TABLE IF NOT EXISTS template_takedowns (
+        id TEXT PRIMARY KEY,
+        template_id TEXT NOT NULL REFERENCES template_products(id),
+        mode TEXT NOT NULL CHECK (mode IN ('suspend','remove')),
+        reason TEXT NOT NULL,
+        actor_id TEXT NOT NULL REFERENCES users(id),
+        previous_status TEXT NOT NULL,
+        entitlements_revoked INTEGER NOT NULL DEFAULT 0 CHECK (entitlements_revoked IN (0,1)),
+        created_at TEXT NOT NULL
+      )`.execute(db);
+      await sql`CREATE INDEX IF NOT EXISTS idx_takedowns_template ON template_takedowns(template_id, created_at DESC)`.execute(db);
+      await sql`ALTER TABLE orders ADD COLUMN platform_fee_bps INTEGER NOT NULL DEFAULT 0 CHECK (platform_fee_bps BETWEEN 0 AND 10000)`.execute(db);
+      await sql`CREATE INDEX IF NOT EXISTS idx_orders_seller_paid ON orders(seller_id, paid_at)`.execute(db);
+      await sql`CREATE INDEX IF NOT EXISTS idx_orders_seller_status_paid ON orders(seller_id, payment_status, paid_at)`.execute(db);
+    }
   }
 ];
 
@@ -452,7 +523,10 @@ const downTables: Record<string, readonly string[]> = {
   '0001_auth_users_sessions': ['auth_sessions', 'users'],
   '0002_templates_versions_proofs_previews': ['preview_assets', 'license_proofs', 'template_files', 'template_versions', 'template_products'],
   '0003_refund_policies_orders': ['order_items', 'orders', 'refund_policies'],
-  '0004_transactions_entitlements_complaints_audit': ['idempotency_keys', 'scan_jobs', 'audit_logs', 'complaint_timeline', 'complaint_evidence', 'complaints', 'entitlements', 'transactions']
+  '0004_transactions_entitlements_complaints_audit': ['idempotency_keys', 'scan_jobs', 'audit_logs', 'complaint_timeline', 'complaint_evidence', 'complaints', 'entitlements', 'transactions'],
+  '0015_m3_email_delivery_logs': ['email_delivery_logs'],
+  '0016_m3_complaints_refunds': ['refund_requests'],
+  '0017_m3_takedown_and_fees': ['template_takedowns']
 };
 for (const migration of migrations) {
   const tables = downTables[migration.name];

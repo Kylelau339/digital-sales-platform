@@ -20,12 +20,18 @@ import { registerConnectService, type ConnectClient } from './connect/service.js
 import { createStripeConnectClient } from './connect/stripe-client.js';
 import { createPaymentService, createStripeCheckoutClient, type CheckoutClient } from './payments/service.js';
 import { registerDownloadRoutes } from './http/routes/downloads.js';
+import { registerM3ComplaintRoutes } from './http/routes/m3-complaints.js';
+import { registerM3AdminRoutes } from './http/routes/m3-admin.js';
+import { registerM3SellerRoutes } from './http/routes/m3-seller.js';
+import { createRefundService, createStripeRefundClient, type RefundClient } from './refunds/service.js';
+import { createTakedownService } from './admin/takedown.js';
+import { createEarningsService } from './seller/earnings.js';
 
 const credentials = z.object({ email: z.email().transform(value => value.trim().toLowerCase()), password: z.string().min(10).max(128) }).strict();
 const registration = credentials.extend({ displayName: z.string().trim().min(1).max(80) });
 const publicUser = (user: User) => ({ id: user.id, email: user.email, displayName: user.displayName, roles: user.roles, authStatus: user.authStatus });
 
-export function createApp(db: Kysely<Database>, config: Env, options: { verificationSender?: VerificationSender; connectClient?: ConnectClient; checkoutClient?: CheckoutClient; clock?: () => Date } = {}) {
+export function createApp(db: Kysely<Database>, config: Env, options: { verificationSender?: VerificationSender; connectClient?: ConnectClient; checkoutClient?: CheckoutClient; refundClient?: RefundClient; clock?: () => Date } = {}) {
   const app = Fastify({ logger: config.NODE_ENV !== 'test', genReqId: () => id('req'), bodyLimit: 64 * 1024, routerOptions: { maxParamLength: 2048 } });
   app.addContentTypeParser('application/json', { parseAs: 'buffer' }, (request, body, done) => {
     if (request.url === '/api/v1/webhooks/stripe/connect' || request.url === '/api/v1/webhooks/stripe') { (request as typeof request & { rawBody?: Buffer }).rawBody = body as Buffer; }
@@ -36,7 +42,11 @@ export function createApp(db: Kysely<Database>, config: Env, options: { verifica
   const connectClient = options.connectClient ?? (config.STRIPE_SECRET_KEY ? createStripeConnectClient(config) : undefined);
   const connectService = connectClient ? registerConnectService(db, connectClient, { webhookSecret: config.STRIPE_CONNECT_WEBHOOK_SECRET, returnUrl: config.STRIPE_CONNECT_RETURN_URL, refreshUrl: config.STRIPE_CONNECT_REFRESH_URL }) : null;
   const checkoutClient = options.checkoutClient ?? createStripeCheckoutClient(config.STRIPE_SECRET_KEY);
-  const paymentService = checkoutClient ? createPaymentService(db, config.PRIVATE_STORAGE_PATH, checkoutClient, config.STRIPE_WEBHOOK_SECRET) : null;
+  const paymentService = checkoutClient ? createPaymentService(db, config.PRIVATE_STORAGE_PATH, checkoutClient, config.STRIPE_WEBHOOK_SECRET, config.PLATFORM_FEE_BPS) : null;
+  const refundClient = options.refundClient ?? (config.STRIPE_SECRET_KEY ? createStripeRefundClient(config.STRIPE_SECRET_KEY) : null);
+  const refundService = checkoutClient && refundClient ? createRefundService(db, refundClient, checkoutClient.verify, config.STRIPE_WEBHOOK_SECRET) : null;
+  const takedownService = createTakedownService(db);
+  const earningsService = createEarningsService(db, options.clock);
   registerM1Routes(app, db, config.PRIVATE_STORAGE_PATH);
   registerM1ReviewRoutes(app, db, config.PRIVATE_STORAGE_PATH);
   app.register(cookie, { secret: config.SESSION_SECRET });
@@ -57,6 +67,9 @@ export function createApp(db: Kysely<Database>, config: Env, options: { verifica
     if (request.url.includes('/auth/')) reply.header('cache-control', 'no-store');
   });
   registerDownloadRoutes(app, db, config.PRIVATE_STORAGE_PATH, config.CSRF_SECRET, options.clock);
+  registerM3ComplaintRoutes(app, db, options.clock);
+  registerM3AdminRoutes(app, db, refundService, takedownService);
+  registerM3SellerRoutes(app, db, earningsService);
   app.setErrorHandler((error, request, reply) => {
     if (error instanceof DomainError) return reply.code(error.status).send({ code: error.code, message: error.message, requestId: request.id, ...(error.details ? { details: error.details } : {}) });
     if (error instanceof ZodError) return reply.code(422).send({ code: ERROR_CODES.VALIDATION_FAILED, message: 'Request validation failed.', requestId: request.id, details: { issues: error.issues } });
@@ -115,6 +128,9 @@ export function createApp(db: Kysely<Database>, config: Env, options: { verifica
       const raw = (request as typeof request & { rawBody?: Buffer }).rawBody?.toString('utf8') ?? '';
       const signature = request.headers['stripe-signature'];
       if (typeof signature !== 'string') throw new DomainError(ERROR_CODES.PAYMENT_WEBHOOK_INVALID, 400, 'Stripe signature is required.');
+      let eventType = '';
+      try { eventType = String((JSON.parse(raw) as { type?: unknown }).type ?? ''); } catch { /* Signature verification reports invalid payloads. */ }
+      if (refundService && eventType.startsWith('refund.')) return refundService.fulfill(raw, signature);
       return paymentService.fulfill(raw, signature);
     });
   }
@@ -143,7 +159,7 @@ export function createApp(db: Kysely<Database>, config: Env, options: { verifica
     const csrfToken = await setSession(user.id, reply);
     return reply.send({ user: publicUser(user), csrfToken });
   });
-  app.post('/api/v1/auth/email-verification/send', { config: { sessionWrite: true } }, async request => {
+  app.post('/api/v1/auth/email-verification/send', { config: { sessionWrite: true, rateLimit: { max: 5, timeWindow: '1 minute' } } }, async request => {
     const auth = requireAuth(request);
     await emailVerification.send(auth.userId);
     return { ok: true };

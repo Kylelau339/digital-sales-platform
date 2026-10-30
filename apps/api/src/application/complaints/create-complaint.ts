@@ -5,7 +5,7 @@ import { complaintRequestSchema, orderSchema, validate } from '@shared/schemas/d
 import { plusDays, nowUtc, id } from '@shared/time.js';
 import type { ComplaintRepository, EntitlementRepository, OrderRepository } from '../../repositories/ports/index.js';
 
-export interface CreateComplaintRequest { buyerId: string; orderId: string; entitlementId?: string | null; reason: ComplaintReason; description: string; now?: string; }
+export interface CreateComplaintRequest { buyerId: string; orderId: string; entitlementId?: string | null; reason: ComplaintReason; description: string; idempotencyKey?: string; now?: string; }
 
 /** M0 checks only creation eligibility; decisions, refunds and HTTP routing are later milestones. */
 export class CreateComplaintUseCase {
@@ -25,10 +25,11 @@ export class CreateComplaintUseCase {
       }
     }
     const now = request.now ?? nowUtc();
+    const eligible = order.refundPolicySnapshot.eligible.includes(request.reason);
     const exempt = order.refundPolicySnapshot.windowExemptReasons.includes(request.reason);
-    if (!exempt && Date.parse(now) > Date.parse(plusDays(order.paidAt, order.refundPolicySnapshot.windowDays))) {
+    if (eligible && !exempt && Date.parse(now) > Date.parse(plusDays(order.paidAt, order.refundPolicySnapshot.windowDays))) {
       throw new DomainError(ERROR_CODES.REFUND_WINDOW_EXPIRED, 422, 'The refund window for this complaint has expired.');
     }
-    return this.deps.complaints.create({ id: id('CMP'), orderId: order.id, entitlementId: request.entitlementId ?? null, templateId: order.templateId, versionId: order.versionId, reason: request.reason, description: request.description, reviewRoute: exempt ? 'manual_review' : 'standard', actorId: request.buyerId, now });
+    return this.deps.complaints.create({ id: id('CMP'), orderId: order.id, entitlementId: request.entitlementId ?? null, templateId: order.templateId, versionId: order.versionId, reason: request.reason, description: request.description, reviewRoute: eligible && !exempt ? 'standard' : 'manual_review', actorId: request.buyerId, idempotencyKey: request.idempotencyKey ?? null, now });
   }
 }

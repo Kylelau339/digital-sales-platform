@@ -97,6 +97,31 @@ To add another language, extend `apps/web/src/lib/i18n/strings.ts` and register 
 
 TypeScript · React · Vite · Fastify · SQLite (WAL) · Kysely · Stripe Checkout and Connect · Node.js 24
 
+### Buyer complaints, refunds, and takedown
+
+- Buyer-scoped complaint history with idempotent submission.
+- Refund eligibility evaluated against the order's frozen policy snapshot.
+- Full-order refunds through the Stripe Refund API.
+- Raw-body signed `refund.*` webhook reconciliation.
+- Atomic refund ledger, order, complaint, timeline, audit, and entitlement updates.
+- Admin suspend and terminal remove actions with required reasons.
+- Entitlement revocation on removal.
+- Audit records include request id, IP, and user agent.
+
+### Seller earnings dashboard
+
+- Sales, platform fees, refunds, net earnings, tax, order count, and unit count.
+- Date-range and per-product breakdowns.
+- Frozen `PLATFORM_FEE_BPS` snapshot on every order.
+- Seller-isolated access with verified-seller enforcement.
+
+### Transactional email
+
+- SMTP delivery through `nodemailer` for verification codes.
+- Provider-agnostic SMTP configuration for Resend, Postmark, SES, or self-hosted relays.
+- Delivery logging without storing codes or message bodies.
+- Console sender for local development only.
+
 ## Project status
 
 ### Completed
@@ -104,18 +129,19 @@ TypeScript · React · Vite · Fastify · SQLite (WAL) · Kysely · Stripe Check
 - **M0**: SQLite schema, repositories, authentication, sessions, CSRF protection, refund policy snapshots, and application guards.
 - **M1**: Seller upload, ZIP scanning, secret scrubbing, license parsing, proof and preview review, moderator approval, sanitized artifact generation, and public approved catalog.
 - **M2**: Email verification foundation, Stripe Connect onboarding, Stripe Checkout, Stripe webhook fulfillment, payment event deduplication, entitlements, HMAC download reservations, concurrency-safe download consumption, and real sanitized ZIP delivery.
+- **M3**: SMTP verification email delivery with delivery logs, buyer complaints, admin full-order refunds with Stripe Refund API and webhook reconciliation, suspend/remove takedown, seller earnings dashboard, and frozen platform fee snapshots.
 
 ### Not implemented
 
-M3 administrative and financial operations are intentionally not included in this template:
+The following production operations remain intentionally out of scope:
 
-- Production email provider integration.
-- Refund approval workflow and Stripe Refund API integration.
-- Administrative one-click takedown workflow.
-- Seller revenue and settlement dashboard.
-- Additional production operations, reporting, and accounting controls.
-
-These features are left for downstream projects to design and implement according to their own business, legal, tax, and accounting requirements.
+- Partial refunds and multi-refund allocation.
+- Stripe Payout/Transfer integration and seller balance settlement.
+- Chargeback and dispute automation.
+- Email outbox, retry queue, bounce handling, and complaint processing.
+- Multi-currency refunds.
+- Admin override of refund policy blockers.
+- Automated accounting or tax filing.
 
 ## Requirements
 
@@ -213,6 +239,38 @@ stripe listen --forward-to localhost:3000/api/v1/webhooks/stripe/connect
 Use Stripe test cards only during local development. Stripe Tax is enabled in Checkout, but actual calculation depends on the Stripe account's Tax settings, product tax configuration, customer location, and active tax registrations. A zero tax result does not prove tax configuration is complete.
 
 See [REAL_STRIPE_TESTING.md](REAL_STRIPE_TESTING.md) for the short test-mode setup guide.
+
+## Transactional email
+
+Local development uses the console sender:
+
+```dotenv
+EMAIL_PROVIDER=console
+```
+
+Production requires SMTP:
+
+```dotenv
+EMAIL_PROVIDER=smtp
+EMAIL_FROM="Your Store <no-reply@example.com>"
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=...
+SMTP_PASS=...
+```
+
+The SMTP settings work with Resend, Postmark, Amazon SES, or any self-hosted relay. Verification codes are hashed in SQLite; delivery logs record only the recipient, provider, status, and provider message id.
+
+## Refund testing
+
+M3 supports full-order refunds only. Approve a complaint from the admin records tab, then confirm the `refund.created` or `refund.updated` event reaches the same webhook route:
+
+```bash
+stripe listen --events checkout.session.completed,refund.created,refund.updated,refund.failed --forward-to localhost:3000/api/v1/webhooks/stripe
+```
+
+Refund approval requires the original USD payment, the frozen refund policy, and an admin session. Successful refunds mark the order refunded, revoke the entitlement, and append the refund ledger, complaint timeline, and audit log.
 
 ## Verification
 

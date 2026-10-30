@@ -177,6 +177,7 @@ export interface Order {
   quoteRate: { usdToUsdt: string; source: string; capturedAt: UtcIso } | null;
   quoteExpiresAt: UtcIso | null;
   quoteId: string | null;
+  platformFeeBps: number;
   platformFeeCents: MoneyMinor;
   sellerAmountCents: MoneyMinor;
   taxSnapshot: Record<string, JsonValue>;

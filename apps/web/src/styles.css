@@ -4519,3 +4519,9 @@ html[lang="ko"] .hero-display .dot-row { display: none; }
   .filter-bar .sort-note { text-align: left; }
 }
 
+.dlg-title {
+  margin: 0 0 var(--s3);
+  font-size: var(--fs-lg);
+  line-height: 1.2;
+}
+
